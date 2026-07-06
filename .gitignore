@@ -1,0 +1,23 @@
+## .NET build output
+bin/
+obj/
+
+## VS Code
+.vs/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+## Rider / Visual Studio
+.idea/
+*.user
+
+## macOS
+.DS_Store
+
+## MAUI / mobile signing and local secrets
+*.pfx
+*.mobileprovision
+appsettings.*.local.json
