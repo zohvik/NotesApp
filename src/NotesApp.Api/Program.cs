@@ -1,8 +1,15 @@
+using Microsoft.EntityFrameworkCore;
+using NotesApp.Api.Data;
+using NotesApp.Core.Models;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
+
+builder.Services.AddDbContext<NotesDbContext>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("NotesDb")));
 
 var app = builder.Build();
 
@@ -14,28 +21,19 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
+app.MapGet("/api/notes", async (NotesDbContext db) =>
+    await db.Notes
+        .Where(n => !n.IsDeleted)
+        .OrderByDescending(n => n.UpdatedAt)
+        .ToListAsync())
+    .WithName("GetNotes");
 
-app.MapGet("/weatherforecast", () =>
+app.MapPost("/api/notes", async (Note note, NotesDbContext db) =>
 {
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
+    db.Notes.Add(note);
+    await db.SaveChangesAsync();
+    return Results.Created($"/api/notes/{note.Id}", note);
 })
-.WithName("GetWeatherForecast");
+.WithName("CreateNote");
 
 app.Run();
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
