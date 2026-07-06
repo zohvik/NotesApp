@@ -1,23 +1,21 @@
-﻿namespace NotesApp.Client;
+using NotesApp.Client.ViewModels;
+
+namespace NotesApp.Client;
 
 public partial class MainPage : ContentPage
 {
-	int count = 0;
+	private readonly NotesViewModel _viewModel;
 
-	public MainPage()
+	public MainPage(NotesViewModel viewModel)
 	{
 		InitializeComponent();
+		_viewModel = viewModel;
+		BindingContext = viewModel;
 	}
 
-	private void OnCounterClicked(object? sender, EventArgs e)
+	protected override async void OnAppearing()
 	{
-		count++;
-
-		if (count == 1)
-			CounterBtn.Text = $"Clicked {count} time";
-		else
-			CounterBtn.Text = $"Clicked {count} times";
-
-		SemanticScreenReader.Announce(CounterBtn.Text);
+		base.OnAppearing();
+		await _viewModel.LoadNotesCommand.ExecuteAsync(null);
 	}
 }
