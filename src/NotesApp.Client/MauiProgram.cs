@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using NotesApp.Client.Ai;
 using NotesApp.Client.Data;
 using NotesApp.Client.Sync;
 using NotesApp.Client.ViewModels;
@@ -36,6 +37,21 @@ public static class MauiProgram
 			// The app's sandboxed network stack doesn't trust the ASP.NET Core
 			// dev-HTTPS certificate the same way the host machine's command line does.
 			// Only ever accept an unverified certificate in local debug builds.
+			.ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+			{
+				ServerCertificateCustomValidationCallback = (_, _, _, _) => true
+			})
+#endif
+			;
+
+		// Same API host as SyncService. Given a longer timeout because a local LLM
+		// can take several seconds to produce a summary on first run.
+		builder.Services.AddHttpClient<AiService>(client =>
+		{
+			client.BaseAddress = new Uri("https://localhost:7105");
+			client.Timeout = TimeSpan.FromMinutes(2);
+		})
+#if DEBUG
 			.ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
 			{
 				ServerCertificateCustomValidationCallback = (_, _, _, _) => true

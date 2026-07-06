@@ -19,7 +19,7 @@ public partial class MainPage : ContentPage
 
 		// Show local data immediately (offline-first), then sync with the
 		// server in the background without blocking the UI on network access.
-		await _viewModel.LoadNotesCommand.ExecuteAsync(null);
+		await _viewModel.LoadDataCommand.ExecuteAsync(null);
 		_ = _viewModel.SyncCommand.ExecuteAsync(null);
 	}
 }

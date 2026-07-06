@@ -10,4 +10,6 @@ public class NotesDbContext : DbContext
     }
 
     public DbSet<Note> Notes => Set<Note>();
+
+    public DbSet<Folder> Folders => Set<Folder>();
 }
