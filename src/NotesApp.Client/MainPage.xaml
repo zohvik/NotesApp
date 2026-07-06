@@ -33,7 +33,10 @@
                 <Button Text="New" Command="{Binding NewCommand}" />
                 <Button Text="Save" Command="{Binding SaveCommand}" />
                 <Button Text="Delete" Command="{Binding DeleteCommand}" />
+                <Button Text="Sync" Command="{Binding SyncCommand}" />
             </HorizontalStackLayout>
+
+            <Label Text="{Binding SyncStatus}" FontSize="12" TextColor="Gray" />
         </VerticalStackLayout>
 
     </Grid>

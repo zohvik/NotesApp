@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.EntityFrameworkCore;
 using NotesApp.Client.Data;
+using NotesApp.Client.Sync;
 using NotesApp.Core.Models;
 
 namespace NotesApp.Client.ViewModels;
@@ -10,6 +11,7 @@ namespace NotesApp.Client.ViewModels;
 public partial class NotesViewModel : ObservableObject
 {
     private readonly NotesDbContext _db;
+    private readonly SyncService _syncService;
 
     public ObservableCollection<Note> Notes { get; } = new();
 
@@ -22,9 +24,13 @@ public partial class NotesViewModel : ObservableObject
     [ObservableProperty]
     private string editBody = string.Empty;
 
-    public NotesViewModel(NotesDbContext db)
+    [ObservableProperty]
+    private string syncStatus = "Not synced yet";
+
+    public NotesViewModel(NotesDbContext db, SyncService syncService)
     {
         _db = db;
+        _syncService = syncService;
     }
 
     partial void OnSelectedNoteChanged(Note? value)
@@ -38,10 +44,12 @@ public partial class NotesViewModel : ObservableObject
     {
         await _db.Database.EnsureCreatedAsync();
 
-        var notes = await _db.Notes
+        // SQLite has no native DateTimeOffset type, so EF Core's Sqlite provider can't
+        // translate ORDER BY on it into SQL. Fetch first, then sort client-side in memory.
+        var notes = (await _db.Notes
             .Where(n => !n.IsDeleted)
-            .OrderByDescending(n => n.UpdatedAt)
-            .ToListAsync();
+            .ToListAsync())
+            .OrderByDescending(n => n.UpdatedAt);
 
         Notes.Clear();
         foreach (var note in notes)
@@ -106,5 +114,28 @@ public partial class NotesViewModel : ObservableObject
 
         Notes.Remove(SelectedNote);
         New();
+    }
+
+    [RelayCommand]
+    private async Task SyncAsync()
+    {
+        SyncStatus = "Syncing...";
+        try
+        {
+            await _syncService.SyncAsync();
+            await LoadNotesAsync();
+            SyncStatus = $"Synced at {DateTimeOffset.Now:t}";
+        }
+        catch (HttpRequestException)
+        {
+            SyncStatus = "Sync failed - is the API reachable?";
+        }
+        catch (Exception ex)
+        {
+            // This command runs fire-and-forget from OnAppearing, so without this
+            // catch-all an unexpected exception would vanish silently instead of
+            // ever reaching the UI.
+            SyncStatus = $"Sync failed - {ex.Message}";
+        }
     }
 }

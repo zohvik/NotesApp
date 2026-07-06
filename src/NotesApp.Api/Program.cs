@@ -21,19 +21,36 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+// Returns every note, including deleted ones, so clients can mirror deletions during sync.
 app.MapGet("/api/notes", async (NotesDbContext db) =>
     await db.Notes
-        .Where(n => !n.IsDeleted)
         .OrderByDescending(n => n.UpdatedAt)
         .ToListAsync())
     .WithName("GetNotes");
 
-app.MapPost("/api/notes", async (Note note, NotesDbContext db) =>
+// Upsert: creates the note if it doesn't exist yet, otherwise applies the
+// incoming version only if it's newer than what's stored (last-write-wins).
+app.MapPut("/api/notes/{id}", async (Guid id, Note incoming, NotesDbContext db) =>
 {
-    db.Notes.Add(note);
+    var existing = await db.Notes.FindAsync(id);
+
+    if (existing is null)
+    {
+        incoming.Id = id;
+        db.Notes.Add(incoming);
+    }
+    else if (incoming.UpdatedAt > existing.UpdatedAt)
+    {
+        existing.Title = incoming.Title;
+        existing.Body = incoming.Body;
+        existing.CreatedAt = incoming.CreatedAt;
+        existing.UpdatedAt = incoming.UpdatedAt;
+        existing.IsDeleted = incoming.IsDeleted;
+    }
+
     await db.SaveChangesAsync();
-    return Results.Created($"/api/notes/{note.Id}", note);
+    return Results.Ok(existing ?? incoming);
 })
-.WithName("CreateNote");
+.WithName("UpsertNote");
 
 app.Run();

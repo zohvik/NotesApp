@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using NotesApp.Client.Data;
+using NotesApp.Client.Sync;
 using NotesApp.Client.ViewModels;
 
 namespace NotesApp.Client;
@@ -26,6 +27,21 @@ public static class MauiProgram
 			options => options.UseSqlite($"Data Source={dbPath}"),
 			contextLifetime: ServiceLifetime.Singleton,
 			optionsLifetime: ServiceLifetime.Singleton);
+
+		// Client and API both run on this same Mac for now; this address will need
+		// to change once the API is reachable somewhere other than localhost.
+		builder.Services.AddHttpClient<SyncService>(client =>
+			client.BaseAddress = new Uri("https://localhost:7105"))
+#if DEBUG
+			// The app's sandboxed network stack doesn't trust the ASP.NET Core
+			// dev-HTTPS certificate the same way the host machine's command line does.
+			// Only ever accept an unverified certificate in local debug builds.
+			.ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+			{
+				ServerCertificateCustomValidationCallback = (_, _, _, _) => true
+			})
+#endif
+			;
 
 		builder.Services.AddSingleton<NotesViewModel>();
 		builder.Services.AddSingleton<MainPage>();
