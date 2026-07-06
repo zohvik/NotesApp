@@ -1,8 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<TargetFrameworks>net10.0-maccatalyst</TargetFrameworks>
-		<!-- Android and iOS targets come back in the mobile phase; Windows can only be built on/via a Windows machine or CI. -->
+		<!-- Each desktop OS builds only its own target: macOS builds Mac Catalyst,
+		     Windows builds the Windows target. A machine can only build its own
+		     platform's target, so keeping these OS-conditional means `dotnet build`
+		     just works on either OS without trying to build the other's target.
+		     Android and iOS come back in the mobile phase. -->
+		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('osx'))">net10.0-maccatalyst</TargetFrameworks>
+		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">net10.0-windows10.0.19041.0</TargetFrameworks>
+		<!-- Windows itself can only be compiled on a Windows machine or via CI (see .github/workflows/windows-build.yml). -->
 
 		<!-- Our installed Xcode (26.6) is newer than the MAUI workload's pinned MacCatalyst SDK version (26.4).
 		     A minor Xcode version ahead of the pinned one is safe to build against, so skip the exact-version check. -->
