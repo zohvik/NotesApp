@@ -22,6 +22,15 @@ builder.Services.AddScoped<NoteEmbeddingService>();
 
 var app = builder.Build();
 
+// Apply any pending migrations at startup so a fresh clone (e.g. on Windows via
+// LocalDB) gets its schema created automatically, without running EF commands
+// by hand. Safe to run every start: it's a no-op once the DB is up to date.
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<NotesDbContext>();
+    db.Database.Migrate();
+}
+
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
