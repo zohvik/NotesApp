@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Text;
 using System.Text.Json;
 using NotesApp.Client.Ai;
 using NotesApp.Client.Theming;
@@ -11,8 +12,12 @@ public partial class MainPage : ContentPage
 	private readonly NotesViewModel _viewModel;
 	private readonly AiService _aiService;
 
-	// The WebView loads asynchronously; until it signals "ready" we stash the
-	// content to load so nothing is lost if a note is opened before then.
+	// The editor <-> C# bridge is polled: JS queues outbound messages that we
+	// collect via window.__drain(), and we push inbound messages via
+	// window.__inbox(). We use EvaluateJavaScriptAsync because the HybridWebView
+	// message bridge (window.HybridWebView) isn't injected reliably here.
+	private IDispatcherTimer? _pollTimer;
+	private bool _draining;
 	private bool _editorReady;
 	private string _pendingHtml = string.Empty;
 
@@ -31,6 +36,15 @@ public partial class MainPage : ContentPage
 	{
 		base.OnAppearing();
 
+		// Poll the editor for outbound messages.
+		if (_pollTimer is null)
+		{
+			_pollTimer = Dispatcher.CreateTimer();
+			_pollTimer.Interval = TimeSpan.FromMilliseconds(250);
+			_pollTimer.Tick += async (_, _) => await DrainAsync();
+			_pollTimer.Start();
+		}
+
 		// Show local data immediately (offline-first), then sync in the background.
 		await _viewModel.LoadDataCommand.ExecuteAsync(null);
 		_ = _viewModel.SyncCommand.ExecuteAsync(null);
@@ -41,7 +55,7 @@ public partial class MainPage : ContentPage
 	{
 		if (e.PropertyName == nameof(NotesViewModel.SelectedTheme) && _editorReady)
 		{
-			_ = PushThemeAsync();
+			PushTheme();
 		}
 	}
 
@@ -50,7 +64,7 @@ public partial class MainPage : ContentPage
 	{
 		if (_editorReady)
 		{
-			_ = LoadContentAsync(html);
+			LoadContent(html);
 		}
 		else
 		{
@@ -58,63 +72,116 @@ public partial class MainPage : ContentPage
 		}
 	}
 
-	private Task LoadContentAsync(string html)
+	// ---- Outbound: C# -> JS via window.__inbox(base64) ----
+
+	private void SendToEditor(object payload)
 	{
-		var json = JsonSerializer.Serialize(html);
-		return EditorWebView.EvaluateJavaScriptAsync($"window.loadContent({json})");
+		var json = JsonSerializer.Serialize(payload);
+		var b64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(json));
+		MainThread.BeginInvokeOnMainThread(async () =>
+		{
+			try { await EditorWebView.EvaluateJavaScriptAsync($"window.__inbox('{b64}')"); }
+			catch { /* editor not ready yet */ }
+		});
 	}
 
-	private Task PushThemeAsync()
+	private void LoadContent(string html) => SendToEditor(new { action = "load", html });
+
+	private void PushTheme()
 	{
 		var t = ThemeManager.CurrentTheme;
-		var payload = JsonSerializer.Serialize(new
+		SendToEditor(new
 		{
-			bg = t.Bg,
-			text = t.TextPrimary,
-			muted = t.TextMuted,
-			accent = t.Accent,
-			divider = t.Divider
+			action = "theme",
+			theme = new
+			{
+				bg = t.Bg,
+				text = t.TextPrimary,
+				muted = t.TextMuted,
+				accent = t.Accent,
+				divider = t.Divider
+			}
 		});
-		return EditorWebView.EvaluateJavaScriptAsync($"window.setTheme({payload})");
 	}
 
-	// Messages coming from the editor's JavaScript.
-	private async void OnEditorMessage(object? sender, HybridWebViewRawMessageReceivedEventArgs e)
+	// ---- Inbound: JS -> C# via polling window.__drain() ----
+
+	private async Task DrainAsync()
 	{
-		if (string.IsNullOrEmpty(e.Message))
+		if (_draining)
 		{
 			return;
 		}
 
+		_draining = true;
 		try
 		{
-			using var doc = JsonDocument.Parse(e.Message);
-			var type = doc.RootElement.GetProperty("type").GetString();
-
-			switch (type)
+			var raw = await EditorWebView.EvaluateJavaScriptAsync("window.__drain ? window.__drain() : ''");
+			var b64 = Sanitize(raw);
+			if (b64.Length == 0)
 			{
-				case "ready":
-					_editorReady = true;
-					await PushThemeAsync();
-					await LoadContentAsync(_pendingHtml);
-					break;
+				return;
+			}
 
-				case "changed":
-					var html = doc.RootElement.GetProperty("html").GetString() ?? string.Empty;
-					_viewModel.OnEditorContentChanged(html);
-					break;
+			string json;
+			try { json = Encoding.UTF8.GetString(Convert.FromBase64String(b64)); }
+			catch { return; }
 
-				case "complete":
-					var id = doc.RootElement.GetProperty("id").GetInt32();
-					var context = doc.RootElement.GetProperty("context").GetString() ?? string.Empty;
-					await HandleCompletionAsync(id, context);
-					break;
+			using var doc = JsonDocument.Parse(json);
+			foreach (var el in doc.RootElement.EnumerateArray())
+			{
+				await DispatchAsync(el);
 			}
 		}
 		catch
 		{
-			// Ignore malformed messages rather than crash the UI.
+			// Ignore transient evaluation errors.
 		}
+		finally
+		{
+			_draining = false;
+		}
+	}
+
+	private async Task DispatchAsync(JsonElement el)
+	{
+		var type = el.GetProperty("type").GetString();
+		switch (type)
+		{
+			case "ready":
+				_editorReady = true;
+				PushTheme();
+				LoadContent(_pendingHtml);
+				break;
+
+			case "changed":
+				_viewModel.OnEditorContentChanged(el.GetProperty("html").GetString() ?? string.Empty);
+				break;
+
+			case "complete":
+				var id = el.GetProperty("id").GetInt32();
+				var context = el.GetProperty("context").GetString() ?? string.Empty;
+				await HandleCompletionAsync(id, context);
+				break;
+		}
+	}
+
+	// EvaluateJavaScriptAsync can return the string wrapped in quotes; strip them.
+	// base64 never contains quotes, so this is safe.
+	private static string Sanitize(string? raw)
+	{
+		if (string.IsNullOrEmpty(raw))
+		{
+			return string.Empty;
+		}
+
+		raw = raw.Trim();
+		if (raw.Length >= 2 && raw.StartsWith('"') && raw.EndsWith('"'))
+		{
+			raw = raw[1..^1];
+		}
+
+		return raw is "null" ? string.Empty : raw;
 	}
 
 	// Fetch a short AI continuation and hand it back to the editor as ghost text.
@@ -128,8 +195,7 @@ public partial class MainPage : ContentPage
 				return;
 			}
 
-			var json = JsonSerializer.Serialize(suggestion);
-			await EditorWebView.EvaluateJavaScriptAsync($"window.applyCompletion({id}, {json})");
+			SendToEditor(new { action = "complete", id, text = suggestion });
 		}
 		catch
 		{

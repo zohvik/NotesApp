@@ -24,6 +24,12 @@
 		<OutputType>Exe</OutputType>
 		<RootNamespace>NotesApp.Client</RootNamespace>
 		<UseMaui>true</UseMaui>
+
+		<!-- HybridWebView (our rich note editor) uses dynamic System.Text.Json and is
+		     stripped by the trimmer unless this feature switch is set. Without it the
+		     window.HybridWebView bridge is never injected, so no messages cross
+		     between the editor's JS and C#. Keep it on for all configurations. -->
+		<MauiHybridWebViewSupported>true</MauiHybridWebViewSupported>
 		<SingleProject>true</SingleProject>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>

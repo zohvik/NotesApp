@@ -148,8 +148,7 @@
 
                 <Border Grid.Row="3" StrokeThickness="1" Stroke="{DynamicResource Divider}"
                         StrokeShape="RoundRectangle 8" Padding="0" Margin="0,4">
-                    <HybridWebView x:Name="EditorWebView" HybridRoot="editor"
-                                   RawMessageReceived="OnEditorMessage" />
+                    <HybridWebView x:Name="EditorWebView" HybridRoot="editor" />
                 </Border>
 
                 <VerticalStackLayout Grid.Row="4" Spacing="8">
@@ -189,6 +188,7 @@
                         <FlexLayout Wrap="Wrap" JustifyContent="Start" AlignItems="Center">
                             <Button Text="Draft New" Command="{Binding DraftCommand}" Margin="0,0,8,8" />
                             <Button Text="Apply to Note" Command="{Binding ApplyAiCommand}" Margin="0,0,8,8" />
+                            <Button Text="Make Table" Command="{Binding MakeTableCommand}" Margin="0,0,8,8" />
                             <Button Text="Summarize" Command="{Binding SummarizeCommand}" Margin="0,0,8,8" />
                             <Button Text="Find Related" Command="{Binding FindRelatedCommand}" Margin="0,0,8,8" />
                         </FlexLayout>

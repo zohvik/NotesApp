@@ -68,11 +68,33 @@
         let changeTimer = null;  // debounce for notifying C# of edits
 
         // ---- Bridge helpers ----
-        function send(obj) {
-            if (window.HybridWebView) {
-                window.HybridWebView.SendRawMessage(JSON.stringify(obj));
-            }
-        }
+        // The HybridWebView message bridge (window.HybridWebView) doesn't get
+        // injected reliably here, but EvaluateJavaScriptAsync works. So JS queues
+        // outbound messages and C# polls window.__drain(); C# pushes inbound
+        // messages via window.__inbox(). Payloads are base64 so quotes/newlines
+        // can't be mangled by the JS-evaluation layer.
+        window.__outbox = [];
+        function send(obj) { window.__outbox.push(obj); }
+
+        function utf8ToB64(s) { return btoa(unescape(encodeURIComponent(s))); }
+        function b64ToUtf8(b) { return decodeURIComponent(escape(atob(b))); }
+
+        // C# calls this repeatedly to collect queued messages (base64 JSON, or '').
+        window.__drain = function () {
+            if (window.__outbox.length === 0) return '';
+            const s = JSON.stringify(window.__outbox);
+            window.__outbox = [];
+            return utf8ToB64(s);
+        };
+
+        // C# calls this to deliver a message to the editor.
+        window.__inbox = function (b64) {
+            let msg;
+            try { msg = JSON.parse(b64ToUtf8(b64)); } catch (e) { return; }
+            if (msg.action === 'load') window.loadContent(msg.html);
+            else if (msg.action === 'theme') window.setTheme(msg.theme);
+            else if (msg.action === 'complete') window.applyCompletion(msg.id, msg.text);
+        };
 
         // Return the editor HTML with any ghost text stripped out.
         function getContent() {
@@ -103,11 +125,21 @@
         window.applyCompletion = function (id, text) {
             if (id !== ghostId || !text || !caretAtEnd()) return;
             removeGhost();
+            const sel = window.getSelection();
+            if (!sel.rangeCount) return;
+            const range = sel.getRangeAt(0).cloneRange();
             ghostEl = document.createElement('span');
             ghostEl.className = 'ghost';
-            ghostEl.textContent = text;
             ghostEl.contentEditable = 'false';
-            editor.appendChild(ghostEl);
+            ghostEl.textContent = text;
+            // Insert inline exactly at the caret so the suggestion flows with the text.
+            range.insertNode(ghostEl);
+            // Keep the caret right before the ghost so typing continues in place.
+            const caret = document.createRange();
+            caret.setStartBefore(ghostEl);
+            caret.collapse(true);
+            sel.removeAllRanges();
+            sel.addRange(caret);
         };
 
         // ---- Ghost text lifecycle ----
@@ -116,12 +148,19 @@
             ghostEl = null;
         }
         function acceptGhost() {
-            if (!ghostEl) return false;
-            const text = ghostEl.textContent;
-            removeGhost();
-            document.execCommand('insertText', false, text);
+            if (!ghostEl) return;
+            // Replace the ghost span with a real text node in place.
+            const textNode = document.createTextNode(ghostEl.textContent);
+            ghostEl.parentNode.replaceChild(textNode, ghostEl);
+            ghostEl = null;
+            // Put the caret at the end of the just-accepted text.
+            const sel = window.getSelection();
+            const caret = document.createRange();
+            caret.setStartAfter(textNode);
+            caret.collapse(true);
+            sel.removeAllRanges();
+            sel.addRange(caret);
             notifyChanged();
-            return true;
         }
         function caretAtEnd() {
             const sel = window.getSelection();
@@ -190,14 +229,28 @@
 
         // ---- Events ----
         editor.addEventListener('keydown', (e) => {
-            if (e.key === 'Tab' && ghostEl) { e.preventDefault(); acceptGhost(); return; }
-            if (e.key !== 'Tab') removeGhost();
+            if (e.key === 'Tab') {
+                // Always handle Tab ourselves so it never moves focus / jumps the caret.
+                e.preventDefault();
+                if (ghostEl) { acceptGhost(); }
+                else { document.execCommand('insertText', false, '    '); }
+                return;
+            }
+            // Any real edit/navigation key dismisses a stale suggestion.
+            if (ghostEl && !['Shift', 'Control', 'Meta', 'Alt'].includes(e.key)) {
+                removeGhost();
+            }
         });
         editor.addEventListener('input', () => { removeGhost(); notifyChanged(); scheduleCompletion(); });
         editor.addEventListener('blur', () => { removeGhost(); notifyChanged(); });
 
-        // Signal C# that the editor is ready to receive content + theme.
-        window.addEventListener('load', () => send({ type: 'ready' }));
+        // Tell C# (on its next drain poll) that the editor is ready for content.
+        function signalReady() { send({ type: 'ready' }); }
+        if (document.readyState === 'complete') {
+            signalReady();
+        } else {
+            window.addEventListener('load', signalReady);
+        }
     </script>
 </body>
 </html>

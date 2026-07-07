@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using NotesApp.Client.Ai;
 using NotesApp.Client.Data;
 using NotesApp.Client.Sync;
+using NotesApp.Client.Text;
 using NotesApp.Client.Theming;
 using NotesApp.Core.Models;
 
@@ -391,7 +392,7 @@ public partial class NotesViewModel : ObservableObject
             var draft = await _aiService.DraftAsync(AiPrompt);
             NewNote();
             EditTitle = draft.Title;
-            EditBody = TextToHtml(draft.Body);
+            EditBody = MarkdownConverter.ToHtml(draft.Body);
             PushToEditor(EditBody);
             AiStatus = "Draft ready - review and Save.";
         }
@@ -420,7 +421,7 @@ public partial class NotesViewModel : ObservableObject
         try
         {
             var result = await _aiService.RewriteAsync(HtmlToText(EditBody), AiPrompt);
-            EditBody = TextToHtml(result);
+            EditBody = MarkdownConverter.ToHtml(result);
             PushToEditor(EditBody);
             AiStatus = "Applied - review and Save.";
         }
@@ -446,7 +447,7 @@ public partial class NotesViewModel : ObservableObject
             var result = await _aiService.RewriteAsync(
                 HtmlToText(EditBody),
                 "Convert this into a clean Markdown table. Return only the table.");
-            EditBody = TextToHtml(result);
+            EditBody = MarkdownConverter.ToHtml(result);
             PushToEditor(EditBody);
             AiStatus = "Table ready - review and Save.";
         }
