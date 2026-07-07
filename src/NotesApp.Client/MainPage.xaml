@@ -7,37 +7,30 @@
              x:Class="NotesApp.Client.MainPage"
              x:DataType="viewmodels:NotesViewModel"
              Shell.NavBarIsVisible="False"
-             BackgroundColor="{StaticResource Bg}"
+             BackgroundColor="{DynamicResource Bg}"
              Title="Notes">
 
     <ContentPage.Resources>
-        <!-- Notion-style dark palette, scoped to this page. -->
-        <Color x:Key="Bg">#191919</Color>
-        <Color x:Key="BgSidebar">#202020</Color>
-        <Color x:Key="BgList">#1C1C1C</Color>
-        <Color x:Key="Divider">#2F2F2F</Color>
-        <Color x:Key="TextPrimary">#E9E9E7</Color>
-        <Color x:Key="TextMuted">#8B8B8B</Color>
-        <Color x:Key="RowSelected">#2C2C2C</Color>
-        <Color x:Key="Accent">#5B8DEF</Color>
+        <!-- Colors come from ThemeManager (Application.Resources) via DynamicResource,
+             so switching themes at runtime repaints everything below. -->
 
         <!-- Implicit styles so we don't repeat colors on every control. -->
         <Style TargetType="Label">
-            <Setter Property="TextColor" Value="{StaticResource TextPrimary}" />
+            <Setter Property="TextColor" Value="{DynamicResource TextPrimary}" />
         </Style>
         <Style TargetType="Entry">
-            <Setter Property="TextColor" Value="{StaticResource TextPrimary}" />
+            <Setter Property="TextColor" Value="{DynamicResource TextPrimary}" />
             <Setter Property="BackgroundColor" Value="Transparent" />
-            <Setter Property="PlaceholderColor" Value="{StaticResource TextMuted}" />
+            <Setter Property="PlaceholderColor" Value="{DynamicResource TextMuted}" />
         </Style>
         <Style TargetType="Editor">
-            <Setter Property="TextColor" Value="{StaticResource TextPrimary}" />
+            <Setter Property="TextColor" Value="{DynamicResource TextPrimary}" />
             <Setter Property="BackgroundColor" Value="Transparent" />
-            <Setter Property="PlaceholderColor" Value="{StaticResource TextMuted}" />
+            <Setter Property="PlaceholderColor" Value="{DynamicResource TextMuted}" />
         </Style>
         <Style TargetType="Button">
-            <Setter Property="TextColor" Value="{StaticResource TextPrimary}" />
-            <Setter Property="BackgroundColor" Value="{StaticResource RowSelected}" />
+            <Setter Property="TextColor" Value="{DynamicResource TextPrimary}" />
+            <Setter Property="BackgroundColor" Value="{DynamicResource RowSelected}" />
             <Setter Property="FontSize" Value="13" />
             <Setter Property="CornerRadius" Value="6" />
             <Setter Property="Padding" Value="14,8" />
@@ -45,167 +38,204 @@
         </Style>
     </ContentPage.Resources>
 
-    <Grid ColumnDefinitions="210,270,*">
+    <!-- Root overlay grid: the 3-pane workspace, the floating AI panel, and the FAB
+         all share one cell and stack by z-order (later children draw on top). -->
+    <Grid>
 
-        <!-- ============ Column 0: Folder sidebar ============ -->
-        <Grid Grid.Column="0" BackgroundColor="{StaticResource BgSidebar}"
-              RowDefinitions="Auto,*,Auto" Padding="12" RowSpacing="10">
+        <!-- ============ Workspace: sidebar / list / editor ============ -->
+        <Grid ColumnDefinitions="210,270,*">
 
-            <Label Grid.Row="0" Text="NotesApp" FontSize="16" FontAttributes="Bold" Margin="4,4,0,4" />
+            <!-- Column 0: Folder sidebar -->
+            <Grid Grid.Column="0" BackgroundColor="{DynamicResource BgSidebar}"
+                  RowDefinitions="Auto,*,Auto" Padding="12" RowSpacing="10">
 
-            <CollectionView Grid.Row="1"
-                            ItemsSource="{Binding Folders}"
-                            SelectionMode="Single"
-                            SelectedItem="{Binding SelectedFolder}">
-                <CollectionView.ItemTemplate>
-                    <DataTemplate x:DataType="models:Folder">
-                        <Grid Padding="10,9">
-                            <VisualStateManager.VisualStateGroups>
-                                <VisualStateGroup x:Name="CommonStates">
-                                    <VisualState x:Name="Normal">
-                                        <VisualState.Setters>
-                                            <Setter Property="BackgroundColor" Value="Transparent" />
-                                        </VisualState.Setters>
-                                    </VisualState>
-                                    <VisualState x:Name="Selected">
-                                        <VisualState.Setters>
-                                            <Setter Property="BackgroundColor" Value="{StaticResource RowSelected}" />
-                                        </VisualState.Setters>
-                                    </VisualState>
-                                </VisualStateGroup>
-                            </VisualStateManager.VisualStateGroups>
-                            <Label Text="{Binding Name}" FontSize="14" VerticalOptions="Center"
-                                   LineBreakMode="TailTruncation" />
-                        </Grid>
-                    </DataTemplate>
-                </CollectionView.ItemTemplate>
-            </CollectionView>
+                <Label Grid.Row="0" Text="NotesApp" FontSize="16" FontAttributes="Bold" Margin="4,4,0,4" />
 
-            <VerticalStackLayout Grid.Row="2" Spacing="8">
-                <Entry Text="{Binding NewFolderName}" Placeholder="New folder name" FontSize="13" />
-                <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
-                    <Button Grid.Column="0" Text="Add" Command="{Binding AddFolderCommand}" />
-                    <Button Grid.Column="1" Text="Delete" Command="{Binding DeleteFolderCommand}" />
-                </Grid>
-            </VerticalStackLayout>
-        </Grid>
+                <CollectionView Grid.Row="1"
+                                ItemsSource="{Binding Folders}"
+                                SelectionMode="Single"
+                                SelectedItem="{Binding SelectedFolder}">
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate x:DataType="models:Folder">
+                            <Grid Padding="10,9">
+                                <VisualStateManager.VisualStateGroups>
+                                    <VisualStateGroup x:Name="CommonStates">
+                                        <VisualState x:Name="Normal">
+                                            <VisualState.Setters>
+                                                <Setter Property="BackgroundColor" Value="Transparent" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                        <VisualState x:Name="Selected">
+                                            <VisualState.Setters>
+                                                <Setter Property="BackgroundColor" Value="{DynamicResource RowSelected}" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                    </VisualStateGroup>
+                                </VisualStateManager.VisualStateGroups>
+                                <Label Text="{Binding Name}" FontSize="14" VerticalOptions="Center"
+                                       LineBreakMode="TailTruncation" />
+                            </Grid>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+                </CollectionView>
 
-        <!-- ============ Column 1: Note list ============ -->
-        <Grid Grid.Column="1" BackgroundColor="{StaticResource BgList}"
-              RowDefinitions="Auto,*" Padding="10" RowSpacing="8">
+                <VerticalStackLayout Grid.Row="2" Spacing="8">
+                    <Entry Text="{Binding NewFolderName}" Placeholder="New folder name" FontSize="13" />
+                    <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                        <Button Grid.Column="0" Text="Add" Command="{Binding AddFolderCommand}" />
+                        <Button Grid.Column="1" Text="Delete" Command="{Binding DeleteFolderCommand}" />
+                    </Grid>
 
-            <Button Grid.Row="0" Text="＋  New Note" Command="{Binding NewNoteCommand}"
-                    HorizontalOptions="Fill" />
+                    <BoxView HeightRequest="1" Color="{DynamicResource Divider}" Margin="0,4" />
+                    <Label Text="THEME" FontSize="10" FontAttributes="Bold"
+                           TextColor="{DynamicResource TextMuted}" />
+                    <Picker ItemsSource="{Binding Themes}" SelectedItem="{Binding SelectedTheme}"
+                            TextColor="{DynamicResource TextPrimary}"
+                            TitleColor="{DynamicResource TextMuted}" FontSize="13" />
+                </VerticalStackLayout>
+            </Grid>
 
-            <CollectionView Grid.Row="1"
-                            ItemsSource="{Binding Notes}"
-                            SelectionMode="Single"
-                            SelectedItem="{Binding SelectedNote}">
-                <CollectionView.ItemTemplate>
-                    <DataTemplate x:DataType="models:Note">
-                        <Grid Padding="12,10" RowDefinitions="Auto,Auto" RowSpacing="3">
-                            <VisualStateManager.VisualStateGroups>
-                                <VisualStateGroup x:Name="CommonStates">
-                                    <VisualState x:Name="Normal">
-                                        <VisualState.Setters>
-                                            <Setter Property="BackgroundColor" Value="Transparent" />
-                                        </VisualState.Setters>
-                                    </VisualState>
-                                    <VisualState x:Name="Selected">
-                                        <VisualState.Setters>
-                                            <Setter Property="BackgroundColor" Value="{StaticResource RowSelected}" />
-                                        </VisualState.Setters>
-                                    </VisualState>
-                                </VisualStateGroup>
-                            </VisualStateManager.VisualStateGroups>
-                            <Label Grid.Row="0" Text="{Binding Title}" FontAttributes="Bold"
-                                   FontSize="14" LineBreakMode="TailTruncation" />
-                            <Label Grid.Row="1" Text="{Binding Tags}" FontSize="11"
-                                   TextColor="{StaticResource TextMuted}" LineBreakMode="TailTruncation" />
-                        </Grid>
-                    </DataTemplate>
-                </CollectionView.ItemTemplate>
-            </CollectionView>
-        </Grid>
+            <!-- Column 1: Note list -->
+            <Grid Grid.Column="1" BackgroundColor="{DynamicResource BgList}"
+                  RowDefinitions="Auto,*" Padding="10" RowSpacing="8">
 
-        <!-- ============ Column 2: Editor ============ -->
-        <ScrollView Grid.Column="2" BackgroundColor="{StaticResource Bg}">
-            <VerticalStackLayout Padding="28,24" Spacing="14">
+                <Button Grid.Row="0" Text="＋  New Note" Command="{Binding NewNoteCommand}"
+                        HorizontalOptions="Fill" />
 
-                <Entry Text="{Binding EditTitle}" Placeholder="Untitled"
+                <CollectionView Grid.Row="1"
+                                ItemsSource="{Binding Notes}"
+                                SelectionMode="Single"
+                                SelectedItem="{Binding SelectedNote}">
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate x:DataType="models:Note">
+                            <Grid Padding="12,10" RowDefinitions="Auto,Auto" RowSpacing="3">
+                                <VisualStateManager.VisualStateGroups>
+                                    <VisualStateGroup x:Name="CommonStates">
+                                        <VisualState x:Name="Normal">
+                                            <VisualState.Setters>
+                                                <Setter Property="BackgroundColor" Value="Transparent" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                        <VisualState x:Name="Selected">
+                                            <VisualState.Setters>
+                                                <Setter Property="BackgroundColor" Value="{DynamicResource RowSelected}" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                    </VisualStateGroup>
+                                </VisualStateManager.VisualStateGroups>
+                                <Label Grid.Row="0" Text="{Binding Title}" FontAttributes="Bold"
+                                       FontSize="14" LineBreakMode="TailTruncation" />
+                                <Label Grid.Row="1" Text="{Binding Tags}" FontSize="11"
+                                       TextColor="{DynamicResource TextMuted}" LineBreakMode="TailTruncation" />
+                            </Grid>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+                </CollectionView>
+            </Grid>
+
+            <!-- Column 2: Editor. Title/tags on top, the rich WebView editor fills
+                 the middle, actions pinned at the bottom. -->
+            <Grid Grid.Column="2" BackgroundColor="{DynamicResource Bg}"
+                  RowDefinitions="Auto,Auto,Auto,*,Auto" Padding="28,24" RowSpacing="12">
+
+                <Entry Grid.Row="0" Text="{Binding EditTitle}" Placeholder="Untitled"
                        FontSize="28" FontAttributes="Bold" />
 
-                <Entry Text="{Binding EditTags}" Placeholder="tags, comma, separated"
-                       FontSize="13" TextColor="{StaticResource TextMuted}" />
+                <Entry Grid.Row="1" Text="{Binding EditTags}" Placeholder="tags, comma, separated"
+                       FontSize="13" TextColor="{DynamicResource TextMuted}" />
 
-                <BoxView HeightRequest="1" Color="{StaticResource Divider}" Margin="0,2" />
+                <BoxView Grid.Row="2" HeightRequest="1" Color="{DynamicResource Divider}" Margin="0,2" />
 
-                <Editor Text="{Binding EditBody}" Placeholder="Start writing, or use the AI buttons below..."
-                        FontSize="15" MinimumHeightRequest="320" AutoSize="TextChanges" />
+                <Border Grid.Row="3" StrokeThickness="1" Stroke="{DynamicResource Divider}"
+                        StrokeShape="RoundRectangle 8" Padding="0" Margin="0,4">
+                    <HybridWebView x:Name="EditorWebView" HybridRoot="editor"
+                                   RawMessageReceived="OnEditorMessage" />
+                </Border>
 
-                <FlexLayout Wrap="Wrap" JustifyContent="Start" AlignItems="Center">
-                    <Button Text="Save" Command="{Binding SaveNoteCommand}" Margin="0,0,8,8" />
-                    <Button Text="Delete" Command="{Binding DeleteNoteCommand}" Margin="0,0,8,8" />
-                    <Button Text="Summarize" Command="{Binding SummarizeCommand}" Margin="0,0,8,8" />
-                    <Button Text="Sync" Command="{Binding SyncCommand}" Margin="0,0,8,8" />
-                </FlexLayout>
+                <VerticalStackLayout Grid.Row="4" Spacing="8">
+                    <FlexLayout Wrap="Wrap" JustifyContent="Start" AlignItems="Center">
+                        <Button Text="Save" Command="{Binding SaveNoteCommand}" Margin="0,0,8,8" />
+                        <Button Text="Delete" Command="{Binding DeleteNoteCommand}" Margin="0,0,8,8" />
+                        <Button Text="Sync" Command="{Binding SyncCommand}" Margin="0,0,8,8" />
+                    </FlexLayout>
+                    <Label Text="{Binding SyncStatus}" FontSize="12"
+                           TextColor="{DynamicResource TextMuted}" />
+                </VerticalStackLayout>
+            </Grid>
+        </Grid>
 
-                <!-- AI authoring: draft a new note, edit the current one, or tabulate it. -->
-                <Border Padding="14" StrokeThickness="1" Stroke="{StaticResource Divider}"
-                        BackgroundColor="{StaticResource BgList}" StrokeShape="RoundRectangle 8">
-                    <VerticalStackLayout Spacing="10">
-                        <Label Text="AI ASSISTANT" FontAttributes="Bold" FontSize="11"
-                               TextColor="{StaticResource Accent}" />
+        <!-- ============ Floating AI panel (hidden until toggled) ============ -->
+        <Border WidthRequest="380" HeightRequest="520"
+                HorizontalOptions="End" VerticalOptions="End"
+                Margin="0,0,20,88"
+                IsVisible="{Binding IsAiOpen}"
+                BackgroundColor="{DynamicResource BgSidebar}"
+                Stroke="{DynamicResource Divider}" StrokeThickness="1"
+                StrokeShape="RoundRectangle 14" Padding="16">
+            <Grid RowDefinitions="Auto,*" RowSpacing="10">
+
+                <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+                    <Label Grid.Column="0" Text="AI ASSISTANT" FontAttributes="Bold" FontSize="12"
+                           TextColor="{DynamicResource Accent}" VerticalOptions="Center" />
+                    <Button Grid.Column="1" Text="✕" Command="{Binding ToggleAiCommand}"
+                            BackgroundColor="Transparent" Padding="6,0" FontSize="16" />
+                </Grid>
+
+                <ScrollView Grid.Row="1">
+                    <VerticalStackLayout Spacing="12">
                         <Entry Text="{Binding AiPrompt}"
                                Placeholder="Ask AI to write or edit... (e.g. 'draft a meeting agenda' or 'make this more concise')"
                                FontSize="13" />
                         <FlexLayout Wrap="Wrap" JustifyContent="Start" AlignItems="Center">
                             <Button Text="Draft New" Command="{Binding DraftCommand}" Margin="0,0,8,8" />
                             <Button Text="Apply to Note" Command="{Binding ApplyAiCommand}" Margin="0,0,8,8" />
-                            <Button Text="Make Table" Command="{Binding MakeTableCommand}" Margin="0,0,8,8" />
+                            <Button Text="Summarize" Command="{Binding SummarizeCommand}" Margin="0,0,8,8" />
                             <Button Text="Find Related" Command="{Binding FindRelatedCommand}" Margin="0,0,8,8" />
                         </FlexLayout>
                         <Label Text="{Binding AiStatus}" FontSize="12"
-                               TextColor="{StaticResource TextMuted}" />
-                    </VerticalStackLayout>
-                </Border>
+                               TextColor="{DynamicResource TextMuted}" />
 
-                <!-- Related notes found via semantic similarity; tap one to open it. -->
-                <Border Padding="14" StrokeThickness="1" Stroke="{StaticResource Divider}"
-                        BackgroundColor="{StaticResource BgList}" StrokeShape="RoundRectangle 8"
-                        IsVisible="{Binding HasRelated}">
-                    <VerticalStackLayout Spacing="8">
-                        <Label Text="RELATED NOTES" FontAttributes="Bold" FontSize="11"
-                               TextColor="{StaticResource Accent}" />
-                        <VerticalStackLayout BindableLayout.ItemsSource="{Binding RelatedNotes}" Spacing="4">
-                            <BindableLayout.ItemTemplate>
-                                <DataTemplate x:DataType="ai:RelatedNote">
-                                    <Button Text="{Binding Title}" FontSize="13"
-                                            HorizontalOptions="Start" BackgroundColor="Transparent"
-                                            TextColor="{StaticResource Accent}" Padding="0"
-                                            Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodels:NotesViewModel}}, Path=OpenRelatedCommand}"
-                                            CommandParameter="{Binding .}" />
-                                </DataTemplate>
-                            </BindableLayout.ItemTemplate>
-                        </VerticalStackLayout>
-                    </VerticalStackLayout>
-                </Border>
+                        <!-- Related notes found via semantic similarity; tap one to open it. -->
+                        <Border Padding="12" StrokeThickness="1" Stroke="{DynamicResource Divider}"
+                                BackgroundColor="{DynamicResource BgList}" StrokeShape="RoundRectangle 8"
+                                IsVisible="{Binding HasRelated}">
+                            <VerticalStackLayout Spacing="8">
+                                <Label Text="RELATED NOTES" FontAttributes="Bold" FontSize="11"
+                                       TextColor="{DynamicResource Accent}" />
+                                <VerticalStackLayout BindableLayout.ItemsSource="{Binding RelatedNotes}" Spacing="4">
+                                    <BindableLayout.ItemTemplate>
+                                        <DataTemplate x:DataType="ai:RelatedNote">
+                                            <Button Text="{Binding Title}" FontSize="13"
+                                                    HorizontalOptions="Start" BackgroundColor="Transparent"
+                                                    TextColor="{DynamicResource Accent}" Padding="0"
+                                                    Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodels:NotesViewModel}}, Path=OpenRelatedCommand}"
+                                                    CommandParameter="{Binding .}" />
+                                        </DataTemplate>
+                                    </BindableLayout.ItemTemplate>
+                                </VerticalStackLayout>
+                            </VerticalStackLayout>
+                        </Border>
 
-                <Border Padding="14" StrokeThickness="1" Stroke="{StaticResource Divider}"
-                        BackgroundColor="{StaticResource BgSidebar}"
-                        IsVisible="{Binding HasAiSummary}"
-                        StrokeShape="RoundRectangle 8">
-                    <VerticalStackLayout Spacing="6">
-                        <Label Text="AI SUMMARY" FontAttributes="Bold" FontSize="11"
-                               TextColor="{StaticResource Accent}" />
-                        <Label Text="{Binding AiSummary}" FontSize="14" />
+                        <Border Padding="12" StrokeThickness="1" Stroke="{DynamicResource Divider}"
+                                BackgroundColor="{DynamicResource BgList}" StrokeShape="RoundRectangle 8"
+                                IsVisible="{Binding HasAiSummary}">
+                            <VerticalStackLayout Spacing="6">
+                                <Label Text="AI SUMMARY" FontAttributes="Bold" FontSize="11"
+                                       TextColor="{DynamicResource Accent}" />
+                                <Label Text="{Binding AiSummary}" FontSize="14" />
+                            </VerticalStackLayout>
+                        </Border>
                     </VerticalStackLayout>
-                </Border>
+                </ScrollView>
+            </Grid>
+        </Border>
 
-                <Label Text="{Binding SyncStatus}" FontSize="12"
-                       TextColor="{StaticResource TextMuted}" />
-            </VerticalStackLayout>
-        </ScrollView>
+        <!-- ============ Floating action button toggles the AI panel ============ -->
+        <Button Text="✨" FontSize="22"
+                WidthRequest="56" HeightRequest="56" CornerRadius="28"
+                HorizontalOptions="End" VerticalOptions="End" Margin="0,0,20,20"
+                BackgroundColor="{DynamicResource Accent}" TextColor="White"
+                Command="{Binding ToggleAiCommand}" />
 
     </Grid>
 

@@ -131,6 +131,19 @@ app.MapPost("/api/ai/rewrite", async (RewriteRequest request, OllamaAiService ai
 })
 .WithName("RewriteNote");
 
+// Short inline continuation of the given text, for the editor's ghost-text autocomplete.
+app.MapPost("/api/ai/complete", async (CompleteRequest request, OllamaAiService ai) =>
+{
+    if (string.IsNullOrWhiteSpace(request.Text))
+    {
+        return Results.Ok(new CompleteResponse(string.Empty));
+    }
+
+    var suggestion = await ai.CompleteAsync(request.Text);
+    return Results.Ok(new CompleteResponse(suggestion));
+})
+.WithName("Complete");
+
 // Finds notes semantically related to the given text (used to link related notes).
 app.MapPost("/api/ai/related", async (RelatedRequest request, NoteEmbeddingService embeddings) =>
 {
@@ -148,4 +161,6 @@ record DraftRequest(string Prompt);
 record DraftResponse(string Title, string Body);
 record RewriteRequest(string Text, string Instruction);
 record RewriteResponse(string Result);
+record CompleteRequest(string Text);
+record CompleteResponse(string Suggestion);
 record RelatedRequest(Guid NoteId, string Text);

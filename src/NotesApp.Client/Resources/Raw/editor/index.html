@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <style>
+        :root {
+            --bg: #191919;
+            --text: #e9e9e7;
+            --muted: #8b8b8b;
+            --accent: #5b8def;
+            --divider: #2f2f2f;
+        }
+        * { box-sizing: border-box; }
+        html, body {
+            margin: 0; padding: 0; height: 100%;
+            background: var(--bg); color: var(--text);
+            font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+        }
+        #toolbar {
+            position: sticky; top: 0; z-index: 5;
+            display: flex; flex-wrap: wrap; gap: 6px;
+            padding: 10px 12px; background: var(--bg);
+            border-bottom: 1px solid var(--divider);
+        }
+        #toolbar button {
+            background: transparent; color: var(--text);
+            border: 1px solid var(--divider); border-radius: 6px;
+            padding: 5px 10px; font-size: 13px; cursor: pointer;
+        }
+        #toolbar button:hover { background: var(--divider); }
+        #editor {
+            padding: 18px 20px; min-height: 240px; outline: none;
+            font-size: 15px; line-height: 1.6;
+        }
+        #editor:empty::before {
+            content: attr(data-placeholder); color: var(--muted);
+        }
+        #editor h1 { font-size: 26px; margin: 0.4em 0; }
+        #editor h2 { font-size: 20px; margin: 0.4em 0; }
+        #editor table {
+            border-collapse: collapse; margin: 10px 0; width: auto;
+        }
+        #editor th, #editor td {
+            border: 1px solid var(--divider); padding: 6px 10px; min-width: 60px;
+        }
+        #editor th { background: rgba(128,128,128,0.15); font-weight: 600; }
+        .ghost { color: var(--muted); opacity: 0.75; }
+    </style>
+</head>
+<body>
+    <div id="toolbar">
+        <button onclick="fmt('bold')"><b>B</b></button>
+        <button onclick="block('H1')">H1</button>
+        <button onclick="block('H2')">H2</button>
+        <button onclick="fmt('insertUnorderedList')">• List</button>
+        <button onclick="insertTable()">Table</button>
+        <button onclick="addRow()">+ Row</button>
+        <button onclick="addCol()">+ Col</button>
+    </div>
+    <div id="editor" contenteditable="true" data-placeholder="Start writing, press Tab to accept AI suggestions..."></div>
+
+    <script>
+        const editor = document.getElementById('editor');
+        let ghostEl = null;      // the currently-shown ghost <span>, if any
+        let ghostId = 0;         // id of the latest completion request
+        let idleTimer = null;    // debounce for triggering completion
+        let changeTimer = null;  // debounce for notifying C# of edits
+
+        // ---- Bridge helpers ----
+        function send(obj) {
+            if (window.HybridWebView) {
+                window.HybridWebView.SendRawMessage(JSON.stringify(obj));
+            }
+        }
+
+        // Return the editor HTML with any ghost text stripped out.
+        function getContent() {
+            const clone = editor.cloneNode(true);
+            clone.querySelectorAll('.ghost').forEach(g => g.remove());
+            return clone.innerHTML;
+        }
+
+        // Plain text (no ghost) for AI context.
+        function getText() {
+            removeGhost();
+            return editor.innerText;
+        }
+
+        // ---- Called from C# ----
+        window.loadContent = function (html) {
+            removeGhost();
+            editor.innerHTML = html || '';
+        };
+        window.setTheme = function (t) {
+            const r = document.documentElement.style;
+            r.setProperty('--bg', t.bg);
+            r.setProperty('--text', t.text);
+            r.setProperty('--muted', t.muted);
+            r.setProperty('--accent', t.accent);
+            r.setProperty('--divider', t.divider);
+        };
+        window.applyCompletion = function (id, text) {
+            if (id !== ghostId || !text || !caretAtEnd()) return;
+            removeGhost();
+            ghostEl = document.createElement('span');
+            ghostEl.className = 'ghost';
+            ghostEl.textContent = text;
+            ghostEl.contentEditable = 'false';
+            editor.appendChild(ghostEl);
+        };
+
+        // ---- Ghost text lifecycle ----
+        function removeGhost() {
+            if (ghostEl && ghostEl.parentNode) ghostEl.parentNode.removeChild(ghostEl);
+            ghostEl = null;
+        }
+        function acceptGhost() {
+            if (!ghostEl) return false;
+            const text = ghostEl.textContent;
+            removeGhost();
+            document.execCommand('insertText', false, text);
+            notifyChanged();
+            return true;
+        }
+        function caretAtEnd() {
+            const sel = window.getSelection();
+            if (!sel.rangeCount) return false;
+            const range = sel.getRangeAt(0);
+            if (!range.collapsed) return false;
+            // True if nothing (other than the ghost) follows the caret.
+            const after = range.cloneRange();
+            after.selectNodeContents(editor);
+            after.setStart(range.endContainer, range.endOffset);
+            const rest = after.cloneContents();
+            rest.querySelectorAll && rest.querySelectorAll('.ghost').forEach(g => g.remove());
+            return (rest.textContent || '').trim().length === 0;
+        }
+        function scheduleCompletion() {
+            clearTimeout(idleTimer);
+            idleTimer = setTimeout(() => {
+                if (!caretAtEnd()) return;
+                const text = editor.innerText.slice(-600).trim();
+                if (text.length < 3) return;
+                ghostId++;
+                send({ type: 'complete', id: ghostId, context: text });
+            }, 700);
+        }
+
+        // ---- Change notification (debounced) ----
+        function notifyChanged() {
+            clearTimeout(changeTimer);
+            changeTimer = setTimeout(() => send({ type: 'changed', html: getContent() }), 250);
+        }
+
+        // ---- Toolbar actions ----
+        function fmt(cmd) { editor.focus(); document.execCommand(cmd, false, null); notifyChanged(); }
+        function block(tag) { editor.focus(); document.execCommand('formatBlock', false, tag); notifyChanged(); }
+        function insertTable() {
+            editor.focus();
+            const html = '<table><tr><th>Column 1</th><th>Column 2</th></tr>' +
+                         '<tr><td>&nbsp;</td><td>&nbsp;</td></tr></table><p>&nbsp;</p>';
+            document.execCommand('insertHTML', false, html);
+            notifyChanged();
+        }
+        function currentTable() {
+            let n = window.getSelection().anchorNode;
+            while (n && n !== editor) {
+                if (n.tagName === 'TABLE') return n;
+                n = n.parentNode;
+            }
+            const tables = editor.querySelectorAll('table');
+            return tables.length ? tables[tables.length - 1] : null;
+        }
+        function addRow() {
+            const t = currentTable(); if (!t) return;
+            const cols = t.rows[0] ? t.rows[0].cells.length : 2;
+            const row = t.insertRow(-1);
+            for (let i = 0; i < cols; i++) { row.insertCell(-1).innerHTML = '&nbsp;'; }
+            notifyChanged();
+        }
+        function addCol() {
+            const t = currentTable(); if (!t) return;
+            for (let i = 0; i < t.rows.length; i++) {
+                const cell = t.rows[i].insertCell(-1);
+                cell.innerHTML = i === 0 ? '<b>&nbsp;</b>' : '&nbsp;';
+            }
+            notifyChanged();
+        }
+
+        // ---- Events ----
+        editor.addEventListener('keydown', (e) => {
+            if (e.key === 'Tab' && ghostEl) { e.preventDefault(); acceptGhost(); return; }
+            if (e.key !== 'Tab') removeGhost();
+        });
+        editor.addEventListener('input', () => { removeGhost(); notifyChanged(); scheduleCompletion(); });
+        editor.addEventListener('blur', () => { removeGhost(); notifyChanged(); });
+
+        // Signal C# that the editor is ready to receive content + theme.
+        window.addEventListener('load', () => send({ type: 'ready' }));
+    </script>
+</body>
+</html>

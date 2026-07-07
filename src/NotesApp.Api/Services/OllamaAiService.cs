@@ -23,9 +23,11 @@ public class OllamaAiService
     }
 
     // Shared low-level call: send a prompt, get back the model's completed text.
-    private async Task<string> GenerateAsync(string prompt)
+    // maxTokens caps the output length (used to keep autocomplete short and fast).
+    private async Task<string> GenerateAsync(string prompt, int? maxTokens = null)
     {
-        var request = new OllamaGenerateRequest(Model, prompt, Stream: false);
+        var options = maxTokens is null ? null : new OllamaOptions(maxTokens.Value);
+        var request = new OllamaGenerateRequest(Model, prompt, Stream: false, Options: options);
 
         var response = await _http.PostAsJsonAsync("/api/generate", request);
         response.EnsureSuccessStatusCode();
@@ -69,6 +71,15 @@ public class OllamaAiService
             $"Rewrite the note below according to this instruction: {instruction}\n" +
             "Return only the rewritten note, with no preamble or explanation.\n\n" + text);
 
+    // Short continuation of the user's text, for inline "ghost text" autocomplete.
+    // Capped at a few tokens so it returns quickly.
+    public Task<string> CompleteAsync(string context) =>
+        GenerateAsync(
+            "Continue the user's note naturally from exactly where it ends. " +
+            "Return ONLY the continuation (a few words up to one short sentence). " +
+            "Do not repeat what was already written, no quotes, no preamble.\n\n" + context,
+            maxTokens: 24);
+
     // Turns text into an embedding vector via the embedding model's /api/embeddings.
     public async Task<float[]> EmbedAsync(string text)
     {
@@ -90,7 +101,12 @@ public record DraftedNote(string Title, string Body);
 public record OllamaGenerateRequest(
     [property: JsonPropertyName("model")] string Model,
     [property: JsonPropertyName("prompt")] string Prompt,
-    [property: JsonPropertyName("stream")] bool Stream);
+    [property: JsonPropertyName("stream")] bool Stream,
+    [property: JsonPropertyName("options")]
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] OllamaOptions? Options = null);
+
+public record OllamaOptions(
+    [property: JsonPropertyName("num_predict")] int NumPredict);
 
 public record OllamaGenerateResponse(
     [property: JsonPropertyName("response")] string? Response);

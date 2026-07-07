@@ -43,6 +43,16 @@ public class AiService
         return result?.Result ?? string.Empty;
     }
 
+    // Asks the API for a short inline continuation of the given text (ghost text).
+    public async Task<string> CompleteAsync(string text)
+    {
+        var response = await _http.PostAsJsonAsync("/api/ai/complete", new { Text = text });
+        response.EnsureSuccessStatusCode();
+
+        var result = await response.Content.ReadFromJsonAsync<CompleteResponse>();
+        return result?.Suggestion ?? string.Empty;
+    }
+
     // Asks the API for notes semantically related to the given text.
     public async Task<List<RelatedNote>> GetRelatedAsync(Guid noteId, string text)
     {
@@ -56,6 +66,7 @@ public class AiService
     private record SummarizeResponse(string Summary);
     public record DraftResult(string Title, string Body);
     private record RewriteResponse(string Result);
+    private record CompleteResponse(string Suggestion);
 }
 
 // A note the AI found to be related, with a similarity score (1.0 = most similar).

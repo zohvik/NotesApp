@@ -1,10 +1,13 @@
 using System.Collections.ObjectModel;
+using System.Net;
+using System.Text.RegularExpressions;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.EntityFrameworkCore;
 using NotesApp.Client.Ai;
 using NotesApp.Client.Data;
 using NotesApp.Client.Sync;
+using NotesApp.Client.Theming;
 using NotesApp.Core.Models;
 
 namespace NotesApp.Client.ViewModels;
@@ -53,6 +56,57 @@ public partial class NotesViewModel : ObservableObject
     [ObservableProperty]
     private string syncStatus = "Not synced yet";
 
+    // Whether the floating AI panel is open (hidden by default).
+    [ObservableProperty]
+    private bool isAiOpen;
+
+    // Theme selection. Changing SelectedTheme repaints the app via ThemeManager.
+    public IReadOnlyList<string> Themes => ThemeManager.ThemeNames;
+
+    [ObservableProperty]
+    private string selectedTheme = ThemeManager.Current;
+
+    partial void OnSelectedThemeChanged(string value) => ThemeManager.Apply(value);
+
+    [RelayCommand]
+    private void ToggleAi() => IsAiOpen = !IsAiOpen;
+
+    // Raised when the WebView editor should be (re)loaded with this HTML.
+    // The code-behind subscribes and pushes it into the HybridWebView.
+    public event Action<string>? EditorContentRequested;
+
+    private void PushToEditor(string html) => EditorContentRequested?.Invoke(html);
+
+    // Called by the code-behind when the WebView reports an edit. Sets the body
+    // directly (no PushToEditor) so we don't bounce the content back and forth.
+    public void OnEditorContentChanged(string html) => EditBody = html;
+
+    // The note body is stored as editor HTML. These convert to/from plain text so
+    // the AI (which works in text) gets clean input and its text output can be shown.
+    private static bool LooksLikeHtml(string s) =>
+        !string.IsNullOrEmpty(s) && Regex.IsMatch(s, "<[a-zA-Z/][^>]*>");
+
+    private static string RenderForEditor(string body) =>
+        LooksLikeHtml(body) ? body : TextToHtml(body);
+
+    private static string TextToHtml(string text) =>
+        string.IsNullOrEmpty(text)
+            ? string.Empty
+            : WebUtility.HtmlEncode(text).Replace("\r\n", "\n").Replace("\n", "<br>");
+
+    private static string HtmlToText(string html)
+    {
+        if (string.IsNullOrEmpty(html))
+        {
+            return string.Empty;
+        }
+
+        // Turn block boundaries into newlines, strip remaining tags, decode entities.
+        var text = Regex.Replace(html, "(?i)<(br|/p|/div|/h[1-6]|/tr|/li)\\s*/?>", "\n");
+        text = Regex.Replace(text, "<[^>]+>", string.Empty);
+        return WebUtility.HtmlDecode(text).Trim();
+    }
+
     // NotifyPropertyChangedFor regenerates a change notification for HasAiSummary
     // whenever AiSummary changes, so the summary panel shows/hides automatically.
     [ObservableProperty]
@@ -73,6 +127,7 @@ public partial class NotesViewModel : ObservableObject
         EditTitle = value?.Title ?? string.Empty;
         EditBody = value?.Body ?? string.Empty;
         EditTags = value?.Tags ?? string.Empty;
+        PushToEditor(RenderForEditor(EditBody));
 
         // Related results belong to the previously open note; clear them.
         RelatedNotes.Clear();
@@ -195,6 +250,7 @@ public partial class NotesViewModel : ObservableObject
         EditTitle = string.Empty;
         EditBody = string.Empty;
         EditTags = string.Empty;
+        PushToEditor(string.Empty);
     }
 
     [RelayCommand]
@@ -291,7 +347,8 @@ public partial class NotesViewModel : ObservableObject
     [RelayCommand]
     private async Task SummarizeAsync()
     {
-        if (string.IsNullOrWhiteSpace(EditBody))
+        var bodyText = HtmlToText(EditBody);
+        if (string.IsNullOrWhiteSpace(bodyText))
         {
             AiSummary = "Nothing to summarize yet.";
             return;
@@ -300,7 +357,7 @@ public partial class NotesViewModel : ObservableObject
         AiSummary = "Summarizing...";
         try
         {
-            AiSummary = await _aiService.SummarizeAsync(EditBody);
+            AiSummary = await _aiService.SummarizeAsync(bodyText);
         }
         catch (HttpRequestException)
         {
@@ -334,7 +391,8 @@ public partial class NotesViewModel : ObservableObject
             var draft = await _aiService.DraftAsync(AiPrompt);
             NewNote();
             EditTitle = draft.Title;
-            EditBody = draft.Body;
+            EditBody = TextToHtml(draft.Body);
+            PushToEditor(EditBody);
             AiStatus = "Draft ready - review and Save.";
         }
         catch (Exception ex)
@@ -361,7 +419,9 @@ public partial class NotesViewModel : ObservableObject
         AiStatus = "Editing...";
         try
         {
-            EditBody = await _aiService.RewriteAsync(EditBody, AiPrompt);
+            var result = await _aiService.RewriteAsync(HtmlToText(EditBody), AiPrompt);
+            EditBody = TextToHtml(result);
+            PushToEditor(EditBody);
             AiStatus = "Applied - review and Save.";
         }
         catch (Exception ex)
@@ -383,9 +443,11 @@ public partial class NotesViewModel : ObservableObject
         AiStatus = "Building table...";
         try
         {
-            EditBody = await _aiService.RewriteAsync(
-                EditBody,
+            var result = await _aiService.RewriteAsync(
+                HtmlToText(EditBody),
                 "Convert this into a clean Markdown table. Return only the table.");
+            EditBody = TextToHtml(result);
+            PushToEditor(EditBody);
             AiStatus = "Table ready - review and Save.";
         }
         catch (Exception ex)
@@ -407,7 +469,7 @@ public partial class NotesViewModel : ObservableObject
         AiStatus = "Finding related notes...";
         try
         {
-            var text = $"{SelectedNote.Title}\n{SelectedNote.Body}";
+            var text = $"{SelectedNote.Title}\n{HtmlToText(SelectedNote.Body)}";
             var related = await _aiService.GetRelatedAsync(SelectedNote.Id, text);
 
             RelatedNotes.Clear();
