@@ -72,7 +72,11 @@
                                         </VisualState>
                                     </VisualStateGroup>
                                 </VisualStateManager.VisualStateGroups>
+                                <!-- TextColor set explicitly: WinUI doesn't apply the page-level
+                                     implicit Label style inside CollectionView DataTemplates,
+                                     so without this the folder name renders invisible on dark themes. -->
                                 <Label Text="{Binding Name}" FontSize="14" VerticalOptions="Center"
+                                       TextColor="{DynamicResource TextPrimary}"
                                        LineBreakMode="TailTruncation" />
                             </Grid>
                         </DataTemplate>
@@ -123,8 +127,11 @@
                                         </VisualState>
                                     </VisualStateGroup>
                                 </VisualStateManager.VisualStateGroups>
+                                <!-- Explicit TextColor for the same reason as the folder label above:
+                                     the implicit Label style isn't inherited into this DataTemplate on WinUI. -->
                                 <Label Grid.Row="0" Text="{Binding Title}" FontAttributes="Bold"
-                                       FontSize="14" LineBreakMode="TailTruncation" />
+                                       FontSize="14" TextColor="{DynamicResource TextPrimary}"
+                                       LineBreakMode="TailTruncation" />
                                 <Label Grid.Row="1" Text="{Binding Tags}" FontSize="11"
                                        TextColor="{DynamicResource TextMuted}" LineBreakMode="TailTruncation" />
                             </Grid>
