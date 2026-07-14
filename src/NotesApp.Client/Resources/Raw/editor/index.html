@@ -147,6 +147,8 @@
             window.__outbox = window.__outbox.filter(m => m.type !== 'changed');
             removeGhost();
             editor.innerHTML = sanitize(html);
+            // Fresh note, fresh history: undo must never cross into another note.
+            resetHistory();
         };
         window.setTheme = function (t) {
             const r = document.documentElement.style;
@@ -224,6 +226,57 @@
         function notifyChanged() {
             clearTimeout(changeTimer);
             changeTimer = setTimeout(() => send({ type: 'changed', html: getContent() }), 250);
+            scheduleHistory();
+        }
+
+        // ---- Undo / redo ----
+        // WebKit's native contenteditable undo is unreliable here: loading notes
+        // via innerHTML resets its history and programmatic edits (ghost text,
+        // toolbar commands) pollute it. So the editor keeps its own snapshot
+        // history and handles the standard shortcuts itself.
+        let hist = [''];         // snapshots of editor content
+        let hIndex = 0;          // current position in hist
+        let histTimer = null;    // debounce so rapid typing = one undo step
+
+        function scheduleHistory() {
+            clearTimeout(histTimer);
+            histTimer = setTimeout(pushHistory, 350);
+        }
+        function pushHistory() {
+            clearTimeout(histTimer);
+            const s = getContent();
+            if (hist[hIndex] === s) return;   // nothing actually changed
+            hist = hist.slice(0, hIndex + 1); // drop any redo branch
+            hist.push(s);
+            if (hist.length > 200) hist.shift();
+            hIndex = hist.length - 1;
+        }
+        function resetHistory() {
+            clearTimeout(histTimer);
+            hist = [getContent()];
+            hIndex = 0;
+        }
+        function restore(html) {
+            removeGhost();
+            editor.innerHTML = html;
+            placeCaretAtEnd();
+            notifyChanged();  // sync C#; dedupe in pushHistory keeps hist clean
+        }
+        function undo() {
+            pushHistory();    // commit any pending keystrokes first
+            if (hIndex > 0) { hIndex--; restore(hist[hIndex]); }
+        }
+        function redo() {
+            if (hIndex < hist.length - 1) { hIndex++; restore(hist[hIndex]); }
+        }
+        function placeCaretAtEnd() {
+            editor.focus();
+            const sel = window.getSelection();
+            const range = document.createRange();
+            range.selectNodeContents(editor);
+            range.collapse(false);
+            sel.removeAllRanges();
+            sel.addRange(range);
         }
 
         // ---- Toolbar actions ----
@@ -263,6 +316,17 @@
 
         // ---- Events ----
         editor.addEventListener('keydown', (e) => {
+            // Standard editing shortcuts (Cmd on macOS, Ctrl on Windows).
+            const mod = e.metaKey || e.ctrlKey;
+            if (mod && !e.altKey) {
+                const k = e.key.toLowerCase();
+                if (k === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
+                if (k === 'y') { e.preventDefault(); redo(); return; }
+                if (k === 'b') { e.preventDefault(); fmt('bold'); return; }
+                if (k === 'i') { e.preventDefault(); fmt('italic'); return; }
+                if (k === 'u') { e.preventDefault(); fmt('underline'); return; }
+                // Everything else (Cmd+A/C/V/X...) keeps its native behavior.
+            }
             if (e.key === 'Tab') {
                 // Always handle Tab ourselves so it never moves focus / jumps the caret.
                 e.preventDefault();

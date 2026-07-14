@@ -237,11 +237,14 @@
             </Grid>
         </Border>
 
-        <!-- ============ Floating action button toggles the AI panel ============ -->
-        <Button Text="✨" FontSize="22"
+        <!-- ============ Floating action button toggles the AI panel ============
+             ✦ is a plain text glyph (not an emoji), so unlike ✨ it takes
+             TextColor and follows the theme instead of rendering yellow. -->
+        <Button Text="✦" FontSize="24"
                 WidthRequest="56" HeightRequest="56" CornerRadius="28"
                 HorizontalOptions="End" VerticalOptions="End" Margin="0,0,20,20"
-                BackgroundColor="{DynamicResource Accent}" TextColor="White"
+                BackgroundColor="{DynamicResource Accent}"
+                TextColor="{DynamicResource Bg}"
                 Command="{Binding ToggleAiCommand}" />
 
     </Grid>
