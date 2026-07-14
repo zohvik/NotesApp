@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace NotesApp.Core.Models;
 
 public class Note
@@ -17,6 +19,9 @@ public class Note
 
     // Cached semantic embedding of the note, stored as a JSON array of floats.
     // Populated lazily by the AI embedding step and used to find related notes.
+    // Server-side only: JsonIgnore keeps these large vectors out of every sync
+    // payload — the API computes and stores them, clients never use them.
+    [JsonIgnore]
     public string? Embedding { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }

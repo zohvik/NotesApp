@@ -29,6 +29,7 @@ public partial class MainPage : ContentPage
 		BindingContext = viewModel;
 
 		_viewModel.EditorContentRequested += OnEditorContentRequested;
+		_viewModel.EditorContentFetcher = FetchEditorContentAsync;
 		_viewModel.PropertyChanged += OnViewModelPropertyChanged;
 	}
 
@@ -182,6 +183,34 @@ public partial class MainPage : ContentPage
 		}
 
 		return raw is "null" ? string.Empty : raw;
+	}
+
+	// Pulls the editor's current HTML directly (bypassing the debounced 'changed'
+	// path) so a save can never miss the very latest keystrokes.
+	private async Task<string?> FetchEditorContentAsync()
+	{
+		if (!_editorReady)
+		{
+			return null;
+		}
+
+		try
+		{
+			var raw = await EditorWebView.EvaluateJavaScriptAsync("window.__flush ? window.__flush() : ''");
+			var b64 = Sanitize(raw);
+			if (b64.Length == 0)
+			{
+				return null;
+			}
+
+			var json = Encoding.UTF8.GetString(Convert.FromBase64String(b64));
+			using var doc = JsonDocument.Parse(json);
+			return doc.RootElement.GetProperty("html").GetString();
+		}
+		catch
+		{
+			return null; // fall back to the last debounced content
+		}
 	}
 
 	// Fetch a short AI continuation and hand it back to the editor as ghost text.

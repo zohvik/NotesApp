@@ -96,6 +96,34 @@
             else if (msg.action === 'complete') window.applyCompletion(msg.id, msg.text);
         };
 
+        // C# calls this right before saving: cancel any pending debounced change
+        // notification and hand back the current content directly, so a save can
+        // never miss the last few keystrokes. JSON-wrapped so empty content is
+        // still distinguishable from "no reply".
+        window.__flush = function () {
+            clearTimeout(changeTimer);
+            return utf8ToB64(JSON.stringify({ html: getContent() }));
+        };
+
+        // Note bodies are HTML synced from the server, so treat them as untrusted:
+        // strip anything executable (scripts, embeds, inline handlers, js: URLs)
+        // before it ever reaches editor.innerHTML.
+        function sanitize(html) {
+            const doc = new DOMParser().parseFromString(html || '', 'text/html');
+            doc.querySelectorAll('script,style,iframe,object,embed,link,meta,form').forEach(n => n.remove());
+            for (const el of doc.body.querySelectorAll('*')) {
+                for (const attr of [...el.attributes]) {
+                    const name = attr.name.toLowerCase();
+                    const value = attr.value.trim().toLowerCase();
+                    if (name.startsWith('on') ||
+                        ((name === 'href' || name === 'src') && value.startsWith('javascript:'))) {
+                        el.removeAttribute(attr.name);
+                    }
+                }
+            }
+            return doc.body.innerHTML;
+        }
+
         // Return the editor HTML with any ghost text stripped out.
         function getContent() {
             const clone = editor.cloneNode(true);
@@ -111,8 +139,14 @@
 
         // ---- Called from C# ----
         window.loadContent = function (html) {
+            // A different note is being loaded: any pending or queued 'changed'
+            // notification describes the PREVIOUS note. Drop them, or stale
+            // content could overwrite the note we're about to show.
+            clearTimeout(changeTimer);
+            clearTimeout(idleTimer);
+            window.__outbox = window.__outbox.filter(m => m.type !== 'changed');
             removeGhost();
-            editor.innerHTML = html || '';
+            editor.innerHTML = sanitize(html);
         };
         window.setTheme = function (t) {
             const r = document.documentElement.style;

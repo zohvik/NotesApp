@@ -22,12 +22,15 @@ public static class MauiProgram
 
 		var dbPath = Path.Combine(FileSystem.AppDataDirectory, "notes.db");
 
-		// A desktop/mobile app has no per-request boundary like an ASP.NET Core API does,
-		// so the DbContext is registered as a single shared instance for the app's lifetime.
-		builder.Services.AddDbContext<NotesDbContext>(
-			options => options.UseSqlite($"Data Source={dbPath}"),
-			contextLifetime: ServiceLifetime.Singleton,
-			optionsLifetime: ServiceLifetime.Singleton);
+		// EF Core contexts are not thread-safe, so the app uses two arrangements:
+		//  - a factory, for background work (sync) to create its own short-lived
+		//    contexts that can never collide with the UI's queries;
+		//  - one long-lived context for the ViewModel, whose tracked entities
+		//    back the UI (list selection relies on stable instances).
+		builder.Services.AddDbContextFactory<NotesDbContext>(
+			options => options.UseSqlite($"Data Source={dbPath}"));
+		builder.Services.AddSingleton<NotesDbContext>(sp =>
+			sp.GetRequiredService<IDbContextFactory<NotesDbContext>>().CreateDbContext());
 
 		// Client and API both run on this same Mac for now; this address will need
 		// to change once the API is reachable somewhere other than localhost.
@@ -35,12 +38,10 @@ public static class MauiProgram
 			client.BaseAddress = new Uri("https://localhost:7105"))
 #if DEBUG
 			// The app's sandboxed network stack doesn't trust the ASP.NET Core
-			// dev-HTTPS certificate the same way the host machine's command line does.
-			// Only ever accept an unverified certificate in local debug builds.
-			.ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
-			{
-				ServerCertificateCustomValidationCallback = (_, _, _, _) => true
-			})
+			// dev-HTTPS certificate the same way the host machine's command line
+			// does. Debug builds accept the unverified cert for LOCALHOST ONLY —
+			// never blanket-trust every certificate.
+			.ConfigurePrimaryHttpMessageHandler(() => DevLocalhostHandler())
 #endif
 			;
 
@@ -52,15 +53,23 @@ public static class MauiProgram
 			client.Timeout = TimeSpan.FromMinutes(2);
 		})
 #if DEBUG
-			.ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
-			{
-				ServerCertificateCustomValidationCallback = (_, _, _, _) => true
-			})
+			.ConfigurePrimaryHttpMessageHandler(() => DevLocalhostHandler())
 #endif
 			;
 
 		builder.Services.AddSingleton<NotesViewModel>();
 		builder.Services.AddSingleton<MainPage>();
+
+#if DEBUG
+		// Accepts certificate errors only for local dev hosts; anything else
+		// still gets full certificate validation even in debug builds.
+		static HttpClientHandler DevLocalhostHandler() => new()
+		{
+			ServerCertificateCustomValidationCallback = (msg, _, _, errors) =>
+				errors == System.Net.Security.SslPolicyErrors.None
+				|| msg.RequestUri?.Host is "localhost" or "127.0.0.1"
+		};
+#endif
 
 #if DEBUG
 		builder.Logging.AddDebug();

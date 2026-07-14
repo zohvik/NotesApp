@@ -59,8 +59,19 @@ app.MapPut("/api/notes/{id}", async (Guid id, Note incoming, NotesDbContext db) 
     }
     else if (incoming.UpdatedAt > existing.UpdatedAt)
     {
+        // The content changed, so the cached embedding no longer describes this
+        // note; clear it and the next related-notes query will recompute it.
+        if (existing.Title != incoming.Title || existing.Body != incoming.Body)
+        {
+            existing.Embedding = null;
+        }
+
+        // Copy EVERY client-owned field. When a field is added to Note, it must
+        // be added here too, or updates to it will silently never sync.
         existing.Title = incoming.Title;
         existing.Body = incoming.Body;
+        existing.FolderId = incoming.FolderId;
+        existing.Tags = incoming.Tags;
         existing.CreatedAt = incoming.CreatedAt;
         existing.UpdatedAt = incoming.UpdatedAt;
         existing.IsDeleted = incoming.IsDeleted;

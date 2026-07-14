@@ -76,6 +76,16 @@ public partial class NotesViewModel : ObservableObject
     // The code-behind subscribes and pushes it into the HybridWebView.
     public event Action<string>? EditorContentRequested;
 
+    // Set by the code-behind: fetches the editor's CURRENT html on demand.
+    // The normal 'changed' notifications are debounced (~0.5s behind), so Save
+    // uses this to grab the freshest content instead of a stale snapshot.
+    public Func<Task<string?>>? EditorContentFetcher { get; set; }
+
+    // Serializes all work on the shared DbContext. EF Core contexts are not
+    // safe for concurrent use, and fire-and-forget paths (folder switching,
+    // startup sync) could otherwise overlap a query already in flight.
+    private readonly SemaphoreSlim _dbLock = new(1, 1);
+
     private void PushToEditor(string html) => EditorContentRequested?.Invoke(html);
 
     // Called by the code-behind when the WebView reports an edit. Sets the body
@@ -102,8 +112,10 @@ public partial class NotesViewModel : ObservableObject
             return string.Empty;
         }
 
-        // Turn block boundaries into newlines, strip remaining tags, decode entities.
-        var text = Regex.Replace(html, "(?i)<(br|/p|/div|/h[1-6]|/tr|/li)\\s*/?>", "\n");
+        // Cell boundaries become spaces so table content doesn't glue ("John28"),
+        // then block boundaries become newlines, strip remaining tags, decode entities.
+        var text = Regex.Replace(html, "(?i)</t[dh]>", " ");
+        text = Regex.Replace(text, "(?i)<(br|/p|/div|/h[1-6]|/tr|/li)\\s*/?>", "\n");
         text = Regex.Replace(text, "<[^>]+>", string.Empty);
         return WebUtility.HtmlDecode(text).Trim();
     }
@@ -146,12 +158,37 @@ public partial class NotesViewModel : ObservableObject
     [RelayCommand]
     private async Task LoadDataAsync()
     {
-        await _db.Database.EnsureCreatedAsync();
-        await LoadFoldersAsync();
-        await LoadNotesAsync();
+        await _dbLock.WaitAsync();
+        try
+        {
+            await _db.Database.EnsureCreatedAsync();
+            await LoadFoldersCoreAsync();
+            await LoadNotesCoreAsync();
+        }
+        finally
+        {
+            _dbLock.Release();
+        }
     }
 
+    // Locked wrappers around the unlocked cores. The cores never take the lock
+    // themselves so callers that already hold it (like LoadDataAsync) can compose
+    // them without deadlocking — SemaphoreSlim is not re-entrant.
     private async Task LoadFoldersAsync()
+    {
+        await _dbLock.WaitAsync();
+        try { await LoadFoldersCoreAsync(); }
+        finally { _dbLock.Release(); }
+    }
+
+    private async Task LoadNotesAsync()
+    {
+        await _dbLock.WaitAsync();
+        try { await LoadNotesCoreAsync(); }
+        finally { _dbLock.Release(); }
+    }
+
+    private async Task LoadFoldersCoreAsync()
     {
         var folders = (await _db.Folders
             .Where(f => !f.IsDeleted)
@@ -168,7 +205,7 @@ public partial class NotesViewModel : ObservableObject
         SelectedFolder ??= AllNotesFolder;
     }
 
-    private async Task LoadNotesAsync()
+    private async Task LoadNotesCoreAsync()
     {
         var query = _db.Notes.Where(n => !n.IsDeleted);
 
@@ -206,8 +243,17 @@ public partial class NotesViewModel : ObservableObject
             CreatedAt = now,
             UpdatedAt = now
         };
-        _db.Folders.Add(folder);
-        await _db.SaveChangesAsync();
+
+        await _dbLock.WaitAsync();
+        try
+        {
+            _db.Folders.Add(folder);
+            await _db.SaveChangesAsync();
+        }
+        finally
+        {
+            _dbLock.Release();
+        }
 
         Folders.Add(folder);
         NewFolderName = string.Empty;
@@ -226,17 +272,25 @@ public partial class NotesViewModel : ObservableObject
         var folderId = SelectedFolder.Id;
         var now = DateTimeOffset.UtcNow;
 
-        // Unfile the folder's notes rather than deleting them, so no note is lost.
-        var notesInFolder = await _db.Notes.Where(n => n.FolderId == folderId).ToListAsync();
-        foreach (var note in notesInFolder)
+        await _dbLock.WaitAsync();
+        try
         {
-            note.FolderId = null;
-            note.UpdatedAt = now;
-        }
+            // Unfile the folder's notes rather than deleting them, so no note is lost.
+            var notesInFolder = await _db.Notes.Where(n => n.FolderId == folderId).ToListAsync();
+            foreach (var note in notesInFolder)
+            {
+                note.FolderId = null;
+                note.UpdatedAt = now;
+            }
 
-        SelectedFolder.IsDeleted = true;
-        SelectedFolder.UpdatedAt = now;
-        await _db.SaveChangesAsync();
+            SelectedFolder.IsDeleted = true;
+            SelectedFolder.UpdatedAt = now;
+            await _db.SaveChangesAsync();
+        }
+        finally
+        {
+            _dbLock.Release();
+        }
 
         Folders.Remove(SelectedFolder);
         SelectedFolder = AllNotesFolder;
@@ -262,42 +316,62 @@ public partial class NotesViewModel : ObservableObject
             return;
         }
 
+        // Grab the freshest editor content first: the debounced 'changed' path
+        // can lag a save by ~0.5s, which would silently drop the last keystrokes.
+        if (EditorContentFetcher is not null)
+        {
+            var latest = await EditorContentFetcher();
+            if (latest is not null)
+            {
+                EditBody = latest;
+            }
+        }
+
         var now = DateTimeOffset.UtcNow;
         Guid savedId;
 
-        if (SelectedNote is null)
+        await _dbLock.WaitAsync();
+        try
         {
-            // New notes land in the currently selected folder (null when "All Notes").
-            var folderId = (SelectedFolder is null || SelectedFolder.Id == Guid.Empty)
-                ? (Guid?)null
-                : SelectedFolder.Id;
-
-            var note = new Note
+            if (SelectedNote is null)
             {
-                Title = EditTitle,
-                Body = EditBody,
-                Tags = EditTags,
-                FolderId = folderId,
-                CreatedAt = now,
-                UpdatedAt = now
-            };
-            _db.Notes.Add(note);
-            await _db.SaveChangesAsync();
-            savedId = note.Id;
+                // New notes land in the currently selected folder (null when "All Notes").
+                var folderId = (SelectedFolder is null || SelectedFolder.Id == Guid.Empty)
+                    ? (Guid?)null
+                    : SelectedFolder.Id;
+
+                var note = new Note
+                {
+                    Title = EditTitle,
+                    Body = EditBody,
+                    Tags = EditTags,
+                    FolderId = folderId,
+                    CreatedAt = now,
+                    UpdatedAt = now
+                };
+                _db.Notes.Add(note);
+                await _db.SaveChangesAsync();
+                savedId = note.Id;
+            }
+            else
+            {
+                SelectedNote.Title = EditTitle;
+                SelectedNote.Body = EditBody;
+                SelectedNote.Tags = EditTags;
+                SelectedNote.UpdatedAt = now;
+                await _db.SaveChangesAsync();
+                savedId = SelectedNote.Id;
+            }
+
+            // Reload so the list reflects title changes (Note is a plain model and
+            // doesn't raise change notifications on its own), then reselect the note.
+            await LoadNotesCoreAsync();
         }
-        else
+        finally
         {
-            SelectedNote.Title = EditTitle;
-            SelectedNote.Body = EditBody;
-            SelectedNote.Tags = EditTags;
-            SelectedNote.UpdatedAt = now;
-            await _db.SaveChangesAsync();
-            savedId = SelectedNote.Id;
+            _dbLock.Release();
         }
 
-        // Reload so the list reflects title changes (Note is a plain model and
-        // doesn't raise change notifications on its own), then reselect the note.
-        await LoadNotesAsync();
         SelectedNote = Notes.FirstOrDefault(n => n.Id == savedId);
     }
 
@@ -309,9 +383,17 @@ public partial class NotesViewModel : ObservableObject
             return;
         }
 
-        SelectedNote.IsDeleted = true;
-        SelectedNote.UpdatedAt = DateTimeOffset.UtcNow;
-        await _db.SaveChangesAsync();
+        await _dbLock.WaitAsync();
+        try
+        {
+            SelectedNote.IsDeleted = true;
+            SelectedNote.UpdatedAt = DateTimeOffset.UtcNow;
+            await _db.SaveChangesAsync();
+        }
+        finally
+        {
+            _dbLock.Release();
+        }
 
         Notes.Remove(SelectedNote);
         NewNote();
@@ -500,8 +582,13 @@ public partial class NotesViewModel : ObservableObject
         }
 
         // Prefer the already-loaded instance; otherwise fetch it from the local db.
-        var note = Notes.FirstOrDefault(n => n.Id == related.Id)
-            ?? await _db.Notes.FirstOrDefaultAsync(n => n.Id == related.Id);
+        var note = Notes.FirstOrDefault(n => n.Id == related.Id);
+        if (note is null)
+        {
+            await _dbLock.WaitAsync();
+            try { note = await _db.Notes.FirstOrDefaultAsync(n => n.Id == related.Id); }
+            finally { _dbLock.Release(); }
+        }
 
         if (note is not null)
         {
