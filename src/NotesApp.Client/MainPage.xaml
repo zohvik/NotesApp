@@ -43,10 +43,16 @@
     <Grid>
 
         <!-- ============ Workspace: sidebar / list / editor ============ -->
-        <Grid ColumnDefinitions="210,270,*">
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <!-- Named so code-behind can collapse it to zero width (Notion-style). -->
+                <ColumnDefinition x:Name="SidebarColumn" Width="210" />
+                <ColumnDefinition Width="270" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
 
             <!-- Column 0: Folder sidebar -->
-            <Grid Grid.Column="0" BackgroundColor="{DynamicResource BgSidebar}"
+            <Grid x:Name="SidebarPane" Grid.Column="0" BackgroundColor="{DynamicResource BgSidebar}"
                   RowDefinitions="Auto,*,Auto" Padding="12" RowSpacing="10">
 
                 <Label Grid.Row="0" Text="NotesApp" FontSize="16" FontAttributes="Bold" Margin="4,4,0,4" />
@@ -103,8 +109,13 @@
             <Grid Grid.Column="1" BackgroundColor="{DynamicResource BgList}"
                   RowDefinitions="Auto,*" Padding="10" RowSpacing="8">
 
-                <Button Grid.Row="0" Text="＋  New Note" Command="{Binding NewNoteCommand}"
-                        HorizontalOptions="Fill" />
+                <Grid Grid.Row="0" ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                    <!-- ☰ collapses/expands the folder sidebar. -->
+                    <Button Grid.Column="0" Text="☰" Command="{Binding ToggleSidebarCommand}"
+                            Padding="10,8" FontSize="14" />
+                    <Button Grid.Column="1" Text="＋  New Note" Command="{Binding NewNoteCommand}"
+                            HorizontalOptions="Fill" />
+                </Grid>
 
                 <CollectionView Grid.Row="1"
                                 ItemsSource="{Binding Notes}"
@@ -128,8 +139,9 @@
                                     </VisualStateGroup>
                                 </VisualStateManager.VisualStateGroups>
                                 <!-- Explicit TextColor for the same reason as the folder label above:
-                                     the implicit Label style isn't inherited into this DataTemplate on WinUI. -->
-                                <Label Grid.Row="0" Text="{Binding Title}" FontAttributes="Bold"
+                                     the implicit Label style isn't inherited into this DataTemplate on WinUI.
+                                     TitleDisplay falls back to "Untitled" (auto-save allows empty titles). -->
+                                <Label Grid.Row="0" Text="{Binding TitleDisplay}" FontAttributes="Bold"
                                        FontSize="14" TextColor="{DynamicResource TextPrimary}"
                                        LineBreakMode="TailTruncation" />
                                 <Label Grid.Row="1" Text="{Binding Tags}" FontSize="11"
@@ -145,28 +157,43 @@
             <Grid Grid.Column="2" BackgroundColor="{DynamicResource Bg}"
                   RowDefinitions="Auto,Auto,Auto,*,Auto" Padding="28,24" RowSpacing="12">
 
-                <Entry Grid.Row="0" Text="{Binding EditTitle}" Placeholder="Untitled"
-                       FontSize="28" FontAttributes="Bold" />
+                <Grid Grid.Row="0" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                    <Entry Grid.Column="0" Text="{Binding EditTitle}" Placeholder="Untitled"
+                           FontSize="28" FontAttributes="Bold" />
+                    <!-- Star toggles Favorites membership for the open note.
+                         ☆/★ are text glyphs, so they tint with the theme. -->
+                    <Button Grid.Column="1" Text="☆" FontSize="20" Padding="8,4"
+                            BackgroundColor="Transparent"
+                            TextColor="{DynamicResource TextMuted}"
+                            Command="{Binding ToggleFavoriteCommand}">
+                        <Button.Triggers>
+                            <DataTrigger TargetType="Button" Binding="{Binding SelectedNote.IsFavorite}" Value="True">
+                                <Setter Property="Text" Value="★" />
+                                <Setter Property="TextColor" Value="{DynamicResource Accent}" />
+                            </DataTrigger>
+                        </Button.Triggers>
+                    </Button>
+                </Grid>
 
                 <Entry Grid.Row="1" Text="{Binding EditTags}" Placeholder="tags, comma, separated"
                        FontSize="13" TextColor="{DynamicResource TextMuted}" />
 
                 <BoxView Grid.Row="2" HeightRequest="1" Color="{DynamicResource Divider}" Margin="0,2" />
 
-                <Border Grid.Row="3" StrokeThickness="1" Stroke="{DynamicResource Divider}"
-                        StrokeShape="RoundRectangle 8" Padding="0" Margin="0,4">
-                    <HybridWebView x:Name="EditorWebView" HybridRoot="editor" />
-                </Border>
+                <!-- No border: the editor blends into the page like Notion's canvas.
+                     Notes auto-save while typing, so there's no Save button. -->
+                <HybridWebView Grid.Row="3" x:Name="EditorWebView" HybridRoot="editor" Margin="0,4" />
 
-                <VerticalStackLayout Grid.Row="4" Spacing="8">
-                    <FlexLayout Wrap="Wrap" JustifyContent="Start" AlignItems="Center">
-                        <Button Text="Save" Command="{Binding SaveNoteCommand}" Margin="0,0,8,8" />
-                        <Button Text="Delete" Command="{Binding DeleteNoteCommand}" Margin="0,0,8,8" />
-                        <Button Text="Sync" Command="{Binding SyncCommand}" Margin="0,0,8,8" />
-                    </FlexLayout>
-                    <Label Text="{Binding SyncStatus}" FontSize="12"
-                           TextColor="{DynamicResource TextMuted}" />
-                </VerticalStackLayout>
+                <!-- Right margin keeps the status labels clear of the floating ✦ button. -->
+                <Grid Grid.Row="4" ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="12"
+                      Margin="0,0,72,0">
+                    <Button Grid.Column="0" Text="Delete" Command="{Binding DeleteNoteCommand}" />
+                    <Button Grid.Column="1" Text="Sync" Command="{Binding SyncCommand}" />
+                    <Label Grid.Column="2" Text="{Binding SyncStatus}" FontSize="12"
+                           TextColor="{DynamicResource TextMuted}" VerticalOptions="Center" HorizontalOptions="End" />
+                    <Label Grid.Column="3" Text="{Binding SaveStatus}" FontSize="12"
+                           TextColor="{DynamicResource TextMuted}" VerticalOptions="Center" />
+                </Grid>
             </Grid>
         </Grid>
 

@@ -19,9 +19,17 @@ public partial class NotesViewModel : ObservableObject
     private readonly SyncService _syncService;
     private readonly AiService _aiService;
 
-    // Sentinel folder pinned to the top of the sidebar. Selecting it shows every
-    // note regardless of folder. Its Guid.Empty id is never written to the database.
+    // Sentinel "folders" pinned to the top of the sidebar. They're views, not
+    // real folders: their fixed ids are never written to the database, they just
+    // select a different filter in LoadNotesCoreAsync.
     public static readonly Folder AllNotesFolder = new() { Id = Guid.Empty, Name = "All Notes" };
+    public static readonly Folder RecentsFolder = new() { Id = new Guid("00000000-0000-0000-0000-000000000001"), Name = "Recents" };
+    public static readonly Folder FavoritesFolder = new() { Id = new Guid("00000000-0000-0000-0000-000000000002"), Name = "Favorites" };
+
+    private const int RecentsCount = 15;
+
+    private static bool IsSentinel(Folder? f) =>
+        f is not null && (f.Id == AllNotesFolder.Id || f.Id == RecentsFolder.Id || f.Id == FavoritesFolder.Id);
 
     public ObservableCollection<Folder> Folders { get; } = new();
     public ObservableCollection<Note> Notes { get; } = new();
@@ -57,9 +65,23 @@ public partial class NotesViewModel : ObservableObject
     [ObservableProperty]
     private string syncStatus = "Not synced yet";
 
+    // Subtle auto-save indicator ("Saved 3:42 PM"), Notion-style.
+    [ObservableProperty]
+    private string saveStatus = string.Empty;
+
     // Whether the floating AI panel is open (hidden by default).
     [ObservableProperty]
     private bool isAiOpen;
+
+    // Whether the folder sidebar is expanded (Notion-style collapse). The page
+    // code-behind reacts by resizing the sidebar column; remembered across runs.
+    [ObservableProperty]
+    private bool isSidebarOpen = Preferences.Get("sidebarOpen", true);
+
+    partial void OnIsSidebarOpenChanged(bool value) => Preferences.Set("sidebarOpen", value);
+
+    [RelayCommand]
+    private void ToggleSidebar() => IsSidebarOpen = !IsSidebarOpen;
 
     // Theme selection. Changing SelectedTheme repaints the app via ThemeManager.
     public IReadOnlyList<string> Themes => ThemeManager.ThemeNames;
@@ -85,6 +107,196 @@ public partial class NotesViewModel : ObservableObject
     // safe for concurrent use, and fire-and-forget paths (folder switching,
     // startup sync) could otherwise overlap a query already in flight.
     private readonly SemaphoreSlim _dbLock = new(1, 1);
+
+    // ---- Auto-save (Notion-style: just type, it persists) ----
+    // Editing any field schedules a save ~0.8s after typing stops. Switching
+    // notes flushes pending edits immediately so nothing is ever lost.
+    private CancellationTokenSource? _autoSaveCts;
+    private bool _autoSavePending;
+    private bool _loadingNote; // true while a note is being loaded INTO the edit fields
+
+    partial void OnEditTitleChanged(string value) => ScheduleAutoSave();
+    partial void OnEditBodyChanged(string value) => ScheduleAutoSave();
+    partial void OnEditTagsChanged(string value) => ScheduleAutoSave();
+
+    private void ScheduleAutoSave()
+    {
+        // Field changes caused by loading a note aren't user edits - skip those.
+        if (_loadingNote)
+        {
+            return;
+        }
+
+        _autoSaveCts?.Cancel();
+        var cts = _autoSaveCts = new CancellationTokenSource();
+        _autoSavePending = true;
+        _ = AutoSaveAfterDelayAsync(cts.Token);
+    }
+
+    private async Task AutoSaveAfterDelayAsync(CancellationToken ct)
+    {
+        try
+        {
+            await Task.Delay(800, ct);
+        }
+        catch (TaskCanceledException)
+        {
+            return; // superseded by more typing or a flush
+        }
+
+        await AutoSaveNowAsync(SelectedNote, EditTitle, EditBody, EditTags, selectAfterCreate: true);
+    }
+
+    // Saves the given values into the given note (or creates one when target is
+    // null and there's anything to keep). Values are passed explicitly so a
+    // flush can still save note A's edits after the UI has moved on to note B.
+    private async Task AutoSaveNowAsync(Note? target, string title, string body, string tags, bool selectAfterCreate)
+    {
+        _autoSavePending = false;
+        var now = DateTimeOffset.UtcNow;
+
+        if (target is null)
+        {
+            if (string.IsNullOrWhiteSpace(title) && string.IsNullOrWhiteSpace(body) && string.IsNullOrWhiteSpace(tags))
+            {
+                return; // nothing worth creating
+            }
+
+            // Notes created inside a sentinel tab (All/Recents/Favorites) are unfiled.
+            var folderId = (SelectedFolder is null || IsSentinel(SelectedFolder))
+                ? (Guid?)null
+                : SelectedFolder.Id;
+
+            var note = new Note
+            {
+                Title = title,
+                Body = body,
+                Tags = tags,
+                FolderId = folderId,
+                CreatedAt = now,
+                UpdatedAt = now
+            };
+
+            await _dbLock.WaitAsync();
+            try
+            {
+                _db.Notes.Add(note);
+                await _db.SaveChangesAsync();
+            }
+            finally
+            {
+                _dbLock.Release();
+            }
+
+            Notes.Insert(0, note);
+            if (selectAfterCreate)
+            {
+                // Set the backing field directly: going through the property would
+                // re-trigger OnSelectedNoteChanged and reload the editor mid-typing.
+#pragma warning disable MVVMTK0034 // deliberate bypass of the generated setter (see above)
+                selectedNote = note;
+#pragma warning restore MVVMTK0034
+                OnPropertyChanged(nameof(SelectedNote));
+            }
+        }
+        else
+        {
+            if (target.Title == title && target.Body == body && target.Tags == tags)
+            {
+                return; // nothing changed
+            }
+
+            await _dbLock.WaitAsync();
+            try
+            {
+                target.Title = title;
+                target.Body = body;
+                target.Tags = tags;
+                target.UpdatedAt = now;
+                await _db.SaveChangesAsync();
+            }
+            finally
+            {
+                _dbLock.Release();
+            }
+
+            // Keep the list sorted by last edited: bubble the note to the top.
+            // Move (not remove+insert) preserves the CollectionView selection.
+            var index = Notes.IndexOf(target);
+            if (index > 0)
+            {
+                Notes.Move(index, 0);
+            }
+        }
+
+        SaveStatus = $"Saved {DateTimeOffset.Now:t}";
+    }
+
+    // Commits any pending (not-yet-fired) auto-save immediately.
+    private async Task FlushAutoSaveAsync(Note? target, string title, string body, string tags)
+    {
+        _autoSaveCts?.Cancel();
+        if (_autoSavePending)
+        {
+            await AutoSaveNowAsync(target, title, body, tags, selectAfterCreate: false);
+        }
+    }
+
+    // Full flush used when focus leaves the app (and before sync): grab the very
+    // latest editor content, then commit whatever is pending.
+    public async Task FlushPendingEditsAsync()
+    {
+        if (EditorContentFetcher is not null)
+        {
+            var latest = await EditorContentFetcher();
+            if (latest is not null && latest != EditBody)
+            {
+                EditBody = latest; // marks the auto-save pending...
+            }
+        }
+
+        await FlushAutoSaveAsync(SelectedNote, EditTitle, EditBody, EditTags); // ...committed here
+    }
+
+    // Last-ditch synchronous flush for app shutdown. The window is being torn
+    // down, so we can't await (continuations may never run) or reach the editor's
+    // JavaScript; save what the ViewModel already has using EF's sync API.
+    public void FlushPendingEditsSync()
+    {
+        _autoSaveCts?.Cancel();
+        if (!_autoSavePending || SelectedNote is null)
+        {
+            return; // new-note creation on shutdown isn't worth the complexity
+        }
+
+        _autoSavePending = false;
+        if (SelectedNote.Title == EditTitle && SelectedNote.Body == EditBody && SelectedNote.Tags == EditTags)
+        {
+            return;
+        }
+
+        // Bounded wait: if an async save holds the lock right now, its
+        // continuation needs this (main) thread - blocking forever would
+        // deadlock the quit. After 2s, give up; that in-flight save is the
+        // one carrying these edits anyway.
+        if (!_dbLock.Wait(TimeSpan.FromSeconds(2)))
+        {
+            return;
+        }
+
+        try
+        {
+            SelectedNote.Title = EditTitle;
+            SelectedNote.Body = EditBody;
+            SelectedNote.Tags = EditTags;
+            SelectedNote.UpdatedAt = DateTimeOffset.UtcNow;
+            _db.SaveChanges();
+        }
+        finally
+        {
+            _dbLock.Release();
+        }
+    }
 
     private void PushToEditor(string html) => EditorContentRequested?.Invoke(html);
 
@@ -135,11 +347,18 @@ public partial class NotesViewModel : ObservableObject
         _aiService = aiService;
     }
 
-    partial void OnSelectedNoteChanged(Note? value)
+    partial void OnSelectedNoteChanged(Note? oldValue, Note? newValue)
     {
-        EditTitle = value?.Title ?? string.Empty;
-        EditBody = value?.Body ?? string.Empty;
-        EditTags = value?.Tags ?? string.Empty;
+        // The edit fields still hold the PREVIOUS note's text here - commit any
+        // pending auto-save for it before they get overwritten below.
+        _ = FlushAutoSaveAsync(oldValue, EditTitle, EditBody, EditTags);
+
+        _loadingNote = true;
+        EditTitle = newValue?.Title ?? string.Empty;
+        EditBody = newValue?.Body ?? string.Empty;
+        EditTags = newValue?.Tags ?? string.Empty;
+        _loadingNote = false;
+
         PushToEditor(RenderForEditor(EditBody));
 
         // Related results belong to the previously open note; clear them.
@@ -197,6 +416,8 @@ public partial class NotesViewModel : ObservableObject
 
         Folders.Clear();
         Folders.Add(AllNotesFolder);
+        Folders.Add(RecentsFolder);
+        Folders.Add(FavoritesFolder);
         foreach (var folder in folders)
         {
             Folders.Add(folder);
@@ -209,15 +430,26 @@ public partial class NotesViewModel : ObservableObject
     {
         var query = _db.Notes.Where(n => !n.IsDeleted);
 
-        // Guid.Empty is the "All Notes" sentinel; any real id filters by folder.
-        if (SelectedFolder is not null && SelectedFolder.Id != Guid.Empty)
+        if (SelectedFolder is not null && SelectedFolder.Id == FavoritesFolder.Id)
+        {
+            query = query.Where(n => n.IsFavorite);
+        }
+        else if (SelectedFolder is not null && !IsSentinel(SelectedFolder))
         {
             var folderId = SelectedFolder.Id;
             query = query.Where(n => n.FolderId == folderId);
         }
+        // All Notes and Recents take everything; Recents just truncates below.
 
         // SQLite can't ORDER BY DateTimeOffset, so sort in memory after fetching.
-        var notes = (await query.ToListAsync()).OrderByDescending(n => n.UpdatedAt);
+        var notes = (await query.ToListAsync())
+            .OrderByDescending(n => n.UpdatedAt)
+            .AsEnumerable();
+
+        if (SelectedFolder is not null && SelectedFolder.Id == RecentsFolder.Id)
+        {
+            notes = notes.Take(RecentsCount);
+        }
 
         Notes.Clear();
         foreach (var note in notes)
@@ -263,8 +495,8 @@ public partial class NotesViewModel : ObservableObject
     [RelayCommand]
     private async Task DeleteFolderAsync()
     {
-        // Can't delete the "All Notes" sentinel.
-        if (SelectedFolder is null || SelectedFolder.Id == Guid.Empty)
+        // The sentinel tabs (All Notes / Recents / Favorites) can't be deleted.
+        if (SelectedFolder is null || IsSentinel(SelectedFolder))
         {
             return;
         }
@@ -301,6 +533,9 @@ public partial class NotesViewModel : ObservableObject
     [RelayCommand]
     private void NewNote()
     {
+        // Keep whatever was being typed before starting a fresh note.
+        _ = FlushAutoSaveAsync(SelectedNote, EditTitle, EditBody, EditTags);
+
         SelectedNote = null;
         EditTitle = string.Empty;
         EditBody = string.Empty;
@@ -308,71 +543,29 @@ public partial class NotesViewModel : ObservableObject
         PushToEditor(string.Empty);
     }
 
+    // Stars/unstars the open note. Saves immediately (no debounce) - a favorite
+    // toggle is a deliberate click, not typing.
     [RelayCommand]
-    private async Task SaveNoteAsync()
+    private async Task ToggleFavoriteAsync()
     {
-        if (string.IsNullOrWhiteSpace(EditTitle))
+        if (SelectedNote is null)
         {
             return;
         }
 
-        // Grab the freshest editor content first: the debounced 'changed' path
-        // can lag a save by ~0.5s, which would silently drop the last keystrokes.
-        if (EditorContentFetcher is not null)
-        {
-            var latest = await EditorContentFetcher();
-            if (latest is not null)
-            {
-                EditBody = latest;
-            }
-        }
-
-        var now = DateTimeOffset.UtcNow;
-        Guid savedId;
-
         await _dbLock.WaitAsync();
         try
         {
-            if (SelectedNote is null)
-            {
-                // New notes land in the currently selected folder (null when "All Notes").
-                var folderId = (SelectedFolder is null || SelectedFolder.Id == Guid.Empty)
-                    ? (Guid?)null
-                    : SelectedFolder.Id;
-
-                var note = new Note
-                {
-                    Title = EditTitle,
-                    Body = EditBody,
-                    Tags = EditTags,
-                    FolderId = folderId,
-                    CreatedAt = now,
-                    UpdatedAt = now
-                };
-                _db.Notes.Add(note);
-                await _db.SaveChangesAsync();
-                savedId = note.Id;
-            }
-            else
-            {
-                SelectedNote.Title = EditTitle;
-                SelectedNote.Body = EditBody;
-                SelectedNote.Tags = EditTags;
-                SelectedNote.UpdatedAt = now;
-                await _db.SaveChangesAsync();
-                savedId = SelectedNote.Id;
-            }
-
-            // Reload so the list reflects title changes (Note is a plain model and
-            // doesn't raise change notifications on its own), then reselect the note.
-            await LoadNotesCoreAsync();
+            SelectedNote.IsFavorite = !SelectedNote.IsFavorite;
+            SelectedNote.UpdatedAt = DateTimeOffset.UtcNow;
+            await _db.SaveChangesAsync();
         }
         finally
         {
             _dbLock.Release();
         }
 
-        SelectedNote = Notes.FirstOrDefault(n => n.Id == savedId);
+        SaveStatus = $"Saved {DateTimeOffset.Now:t}";
     }
 
     [RelayCommand]
@@ -407,6 +600,10 @@ public partial class NotesViewModel : ObservableObject
         SyncStatus = "Syncing...";
         try
         {
+            // Commit the very latest editor state first, so sync never uploads a
+            // stale body (the 'changed' pipeline lags typing slightly).
+            await FlushPendingEditsAsync();
+
             await _syncService.SyncAsync();
             await LoadFoldersAsync();
             await LoadNotesAsync();
@@ -476,7 +673,7 @@ public partial class NotesViewModel : ObservableObject
             EditTitle = draft.Title;
             EditBody = MarkdownConverter.ToHtml(draft.Body);
             PushToEditor(EditBody);
-            AiStatus = "Draft ready - review and Save.";
+            AiStatus = "Draft ready - it will auto-save.";
         }
         catch (Exception ex)
         {
@@ -505,7 +702,7 @@ public partial class NotesViewModel : ObservableObject
             var result = await _aiService.RewriteAsync(HtmlToText(EditBody), AiPrompt);
             EditBody = MarkdownConverter.ToHtml(result);
             PushToEditor(EditBody);
-            AiStatus = "Applied - review and Save.";
+            AiStatus = "Applied.";
         }
         catch (Exception ex)
         {
@@ -531,7 +728,7 @@ public partial class NotesViewModel : ObservableObject
                 "Convert this into a clean Markdown table. Return only the table.");
             EditBody = MarkdownConverter.ToHtml(result);
             PushToEditor(EditBody);
-            AiStatus = "Table ready - review and Save.";
+            AiStatus = "Table ready.";
         }
         catch (Exception ex)
         {

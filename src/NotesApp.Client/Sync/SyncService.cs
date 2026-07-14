@@ -90,6 +90,7 @@ public class SyncService
                 local.Body = remote.Body;
                 local.FolderId = remote.FolderId;
                 local.Tags = remote.Tags;
+                local.IsFavorite = remote.IsFavorite;
                 local.CreatedAt = remote.CreatedAt;
                 local.UpdatedAt = remote.UpdatedAt;
                 local.IsDeleted = remote.IsDeleted;

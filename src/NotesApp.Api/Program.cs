@@ -72,6 +72,7 @@ app.MapPut("/api/notes/{id}", async (Guid id, Note incoming, NotesDbContext db) 
         existing.Body = incoming.Body;
         existing.FolderId = incoming.FolderId;
         existing.Tags = incoming.Tags;
+        existing.IsFavorite = incoming.IsFavorite;
         existing.CreatedAt = incoming.CreatedAt;
         existing.UpdatedAt = incoming.UpdatedAt;
         existing.IsDeleted = incoming.IsDeleted;

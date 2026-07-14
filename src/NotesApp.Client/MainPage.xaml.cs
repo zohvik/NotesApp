@@ -31,6 +31,8 @@ public partial class MainPage : ContentPage
 		_viewModel.EditorContentRequested += OnEditorContentRequested;
 		_viewModel.EditorContentFetcher = FetchEditorContentAsync;
 		_viewModel.PropertyChanged += OnViewModelPropertyChanged;
+
+		ApplySidebarState();
 	}
 
 	protected override async void OnAppearing()
@@ -51,13 +53,25 @@ public partial class MainPage : ContentPage
 		_ = _viewModel.SyncCommand.ExecuteAsync(null);
 	}
 
-	// Repaint the WebView editor when the app theme changes.
+	// Repaint the WebView editor when the app theme changes, and resize the
+	// sidebar column when it's collapsed/expanded (ColumnDefinition widths
+	// aren't bindable from XAML, so the ViewModel flag is applied here).
 	private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
 	{
 		if (e.PropertyName == nameof(NotesViewModel.SelectedTheme) && _editorReady)
 		{
 			PushTheme();
 		}
+		else if (e.PropertyName == nameof(NotesViewModel.IsSidebarOpen))
+		{
+			ApplySidebarState();
+		}
+	}
+
+	private void ApplySidebarState()
+	{
+		SidebarColumn.Width = _viewModel.IsSidebarOpen ? new GridLength(210) : new GridLength(0);
+		SidebarPane.IsVisible = _viewModel.IsSidebarOpen;
 	}
 
 	// The ViewModel asks us to (re)load the editor's content.
@@ -86,7 +100,14 @@ public partial class MainPage : ContentPage
 		});
 	}
 
-	private void LoadContent(string html) => SendToEditor(new { action = "load", html });
+	// Each content load gets a new epoch. 'changed' messages echo the epoch they
+	// were typed under, so a message that describes a PREVIOUS note (drained but
+	// not yet dispatched when the user switched) can be recognized and dropped
+	// instead of overwriting the newly opened note.
+	private int _contentEpoch;
+
+	private void LoadContent(string html) =>
+		SendToEditor(new { action = "load", html, epoch = ++_contentEpoch });
 
 	private void PushTheme()
 	{
@@ -156,7 +177,12 @@ public partial class MainPage : ContentPage
 				break;
 
 			case "changed":
-				_viewModel.OnEditorContentChanged(el.GetProperty("html").GetString() ?? string.Empty);
+				// Drop stale messages from a previously loaded note (see _contentEpoch).
+				var epoch = el.TryGetProperty("epoch", out var e) ? e.GetInt32() : 0;
+				if (epoch == _contentEpoch)
+				{
+					_viewModel.OnEditorContentChanged(el.GetProperty("html").GetString() ?? string.Empty);
+				}
 				break;
 
 			case "complete":
