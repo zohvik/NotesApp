@@ -75,15 +75,15 @@ public partial class MainPage : ContentPage
 	}
 
 	// The ViewModel asks us to (re)load the editor's content.
-	private void OnEditorContentRequested(string html)
+	private void OnEditorContentRequested(string html, bool keepHistory)
 	{
 		if (_editorReady)
 		{
-			LoadContent(html);
+			LoadContent(html, keepHistory);
 		}
 		else
 		{
-			_pendingHtml = html;
+			_pendingHtml = html; // pre-ready loads always start a fresh history
 		}
 	}
 
@@ -106,8 +106,8 @@ public partial class MainPage : ContentPage
 	// instead of overwriting the newly opened note.
 	private int _contentEpoch;
 
-	private void LoadContent(string html) =>
-		SendToEditor(new { action = "load", html, epoch = ++_contentEpoch });
+	private void LoadContent(string html, bool keepHistory = false) =>
+		SendToEditor(new { action = "load", html, epoch = ++_contentEpoch, keepHistory });
 
 	private void PushTheme()
 	{

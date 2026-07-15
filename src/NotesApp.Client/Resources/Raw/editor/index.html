@@ -96,7 +96,7 @@
         window.__inbox = function (b64) {
             let msg;
             try { msg = JSON.parse(b64ToUtf8(b64)); } catch (e) { return; }
-            if (msg.action === 'load') { epoch = msg.epoch || 0; window.loadContent(msg.html); }
+            if (msg.action === 'load') { epoch = msg.epoch || 0; window.loadContent(msg.html, !!msg.keepHistory); }
             else if (msg.action === 'theme') window.setTheme(msg.theme);
             else if (msg.action === 'complete') window.applyCompletion(msg.id, msg.text);
         };
@@ -143,19 +143,26 @@
         }
 
         // ---- Called from C# ----
-        window.loadContent = function (html) {
-            // A different note is being loaded: any pending or queued 'changed'
-            // notification describes the PREVIOUS note. Drop them, or stale
-            // content could overwrite the note we're about to show.
+        window.loadContent = function (html, keepHistory) {
+            // New content is being loaded: any pending or queued 'changed'
+            // notification describes the PREVIOUS content. Drop them, or stale
+            // content could overwrite what we're about to show.
             clearTimeout(changeTimer);
             clearTimeout(idleTimer);
             window.__outbox = window.__outbox.filter(m => m.type !== 'changed');
             removeGhost();
-            editor.innerHTML = sanitize(html);
-            // Fresh note, fresh history: undo must never cross into another note.
-            resetHistory();
+            if (keepHistory) {
+                // Same note, new content (an AI edit): commit the pre-edit state
+                // first so a single undo restores it.
+                pushHistory();
+                editor.innerHTML = sanitize(html);
+                pushHistory();
+            } else {
+                // Different note: undo must never cross into another note.
+                editor.innerHTML = sanitize(html);
+                resetHistory();
+            }
         };
-        // loadContent is dispatched with the epoch from __inbox (see below).
         window.setTheme = function (t) {
             const r = document.documentElement.style;
             r.setProperty('--bg', t.bg);

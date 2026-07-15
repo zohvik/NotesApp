@@ -96,7 +96,9 @@ public partial class NotesViewModel : ObservableObject
 
     // Raised when the WebView editor should be (re)loaded with this HTML.
     // The code-behind subscribes and pushes it into the HybridWebView.
-    public event Action<string>? EditorContentRequested;
+    // keepHistory=true preserves the editor's undo stack (AI edits to the SAME
+    // note stay undoable); false resets it (a different note was loaded).
+    public event Action<string, bool>? EditorContentRequested;
 
     // Set by the code-behind: fetches the editor's CURRENT html on demand.
     // The normal 'changed' notifications are debounced (~0.5s behind), so Save
@@ -298,7 +300,8 @@ public partial class NotesViewModel : ObservableObject
         }
     }
 
-    private void PushToEditor(string html) => EditorContentRequested?.Invoke(html);
+    private void PushToEditor(string html, bool keepHistory = false) =>
+        EditorContentRequested?.Invoke(html, keepHistory);
 
     // Called by the code-behind when the WebView reports an edit. Sets the body
     // directly (no PushToEditor) so we don't bounce the content back and forth.
@@ -701,7 +704,7 @@ public partial class NotesViewModel : ObservableObject
         {
             var result = await _aiService.RewriteAsync(HtmlToText(EditBody), AiPrompt);
             EditBody = MarkdownConverter.ToHtml(result);
-            PushToEditor(EditBody);
+            PushToEditor(EditBody, keepHistory: true); // same note: Cmd+Z can revert the AI edit
             AiStatus = "Applied.";
         }
         catch (Exception ex)
@@ -727,7 +730,7 @@ public partial class NotesViewModel : ObservableObject
                 HtmlToText(EditBody),
                 "Convert this into a clean Markdown table. Return only the table.");
             EditBody = MarkdownConverter.ToHtml(result);
-            PushToEditor(EditBody);
+            PushToEditor(EditBody, keepHistory: true); // same note: Cmd+Z can revert the AI edit
             AiStatus = "Table ready.";
         }
         catch (Exception ex)
