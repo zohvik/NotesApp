@@ -384,12 +384,30 @@ public partial class NotesViewModel : ObservableObject
         try
         {
             await _db.Database.EnsureCreatedAsync();
+            await PatchSchemaAsync();
             await LoadFoldersCoreAsync();
             await LoadNotesCoreAsync();
         }
         finally
         {
             _dbLock.Release();
+        }
+    }
+
+    // EnsureCreated only builds brand-new databases; it never alters existing
+    // ones, and the client has no EF migrations. So a database created before a
+    // column existed (e.g. IsFavorite shipped after this PC's db was made) is
+    // missing it and every Notes query would fail. Patch such columns in here.
+    private async Task PatchSchemaAsync()
+    {
+        var hasIsFavorite = (await _db.Database
+            .SqlQueryRaw<int>("SELECT COUNT(*) AS Value FROM pragma_table_info('Notes') WHERE name = 'IsFavorite'")
+            .ToListAsync())[0] > 0;
+
+        if (!hasIsFavorite)
+        {
+            await _db.Database.ExecuteSqlRawAsync(
+                "ALTER TABLE Notes ADD COLUMN IsFavorite INTEGER NOT NULL DEFAULT 0");
         }
     }
 
