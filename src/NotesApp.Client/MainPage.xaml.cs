@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Text;
 using System.Text.Json;
 using NotesApp.Client.Ai;
+using NotesApp.Client.Text;
 using NotesApp.Client.Theming;
 using NotesApp.Client.ViewModels;
 
@@ -190,6 +191,41 @@ public partial class MainPage : ContentPage
 				var context = el.GetProperty("context").GetString() ?? string.Empty;
 				await HandleCompletionAsync(id, context);
 				break;
+
+			// Block menu's "Ask AI": rewrite one block of the note per the user's
+			// instruction. Runs through the same API endpoint as the AI panel.
+			case "blockAi":
+				var blockId = el.GetProperty("id").GetInt32();
+				var blockEpoch = el.TryGetProperty("epoch", out var be) ? be.GetInt32() : 0;
+				var blockText = el.GetProperty("text").GetString() ?? string.Empty;
+				var instruction = el.GetProperty("instruction").GetString() ?? string.Empty;
+				_ = HandleBlockAiAsync(blockId, blockEpoch, blockText, instruction);
+				break;
+		}
+	}
+
+	// Fire-and-forget so a slow model doesn't stall the message-drain loop; the
+	// editor shows the pending state on the block until the reply lands. The
+	// epoch rides along so the editor can drop results for a note that's no
+	// longer open.
+	private async Task HandleBlockAiAsync(int id, int epoch, string text, string instruction)
+	{
+		if (string.IsNullOrWhiteSpace(text) || string.IsNullOrWhiteSpace(instruction))
+		{
+			SendToEditor(new { action = "blockAiResult", id, epoch, error = true });
+			return;
+		}
+
+		try
+		{
+			var result = await _aiService.RewriteAsync(text, instruction);
+			SendToEditor(new { action = "blockAiResult", id, epoch, html = MarkdownConverter.ToHtml(result) });
+		}
+		catch
+		{
+			// Model/API failure: clear the block's pending state; the AI panel's
+			// status line is not involved here, so there's nothing else to show.
+			SendToEditor(new { action = "blockAiResult", id, epoch, error = true });
 		}
 	}
 

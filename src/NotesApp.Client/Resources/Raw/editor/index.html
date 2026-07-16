@@ -51,6 +51,51 @@
         }
         #editor th { background: rgba(128,128,128,0.15); font-weight: 600; }
         .ghost { color: var(--muted); opacity: 0.75; }
+
+        /* ---- Notion-style block handle + context menu ---- */
+        /* ⋮⋮ grip that appears in the left gutter of the hovered block. */
+        #handle {
+            position: fixed; display: none; width: 22px; height: 24px;
+            align-items: center; justify-content: center;
+            color: var(--muted); border-radius: 5px; cursor: pointer;
+            font-size: 14px; letter-spacing: -1px; user-select: none; z-index: 9;
+        }
+        #handle:hover { background: var(--divider); color: var(--text); }
+        #blockmenu {
+            position: fixed; display: none; width: 250px;
+            background: var(--bg); border: 1px solid var(--divider);
+            border-radius: 10px; box-shadow: 0 12px 34px rgba(0,0,0,0.5);
+            padding: 6px; z-index: 10; font-size: 13.5px;
+        }
+        .bm-input {
+            width: 100%; margin: 2px 2px 6px; padding: 6px 8px;
+            background: transparent; color: var(--text);
+            border: 1px solid var(--divider); border-radius: 6px;
+            font-size: 13px; outline: none;
+        }
+        .bm-input:focus { border-color: var(--accent); }
+        .bm-item {
+            display: flex; gap: 9px; align-items: center;
+            padding: 6px 8px; border-radius: 6px; cursor: pointer;
+            color: var(--text); white-space: nowrap;
+        }
+        .bm-item:hover, .bm-item.active { background: var(--divider); }
+        .bm-icon { width: 18px; text-align: center; color: var(--muted); flex: none; }
+        .bm-kbd { margin-left: auto; color: var(--muted); font-size: 11px; }
+        .bm-chev { margin-left: auto; color: var(--muted); }
+        .bm-sep { height: 1px; background: var(--divider); margin: 5px 4px; }
+        .bm-title { padding: 4px 8px 6px; color: var(--muted); font-size: 11px; }
+        .bm-danger, .bm-danger .bm-icon { color: #e35958; }
+        .bm-swatches { display: grid; grid-template-columns: repeat(9, 1fr); gap: 5px; padding: 4px 6px 8px; }
+        .bm-swatch {
+            width: 20px; height: 20px; border-radius: 5px;
+            border: 1px solid var(--divider); cursor: pointer;
+            display: flex; align-items: center; justify-content: center; font-size: 11px;
+        }
+        .bm-swatch:hover { outline: 2px solid var(--accent); }
+        /* Block being rewritten by AI pulses until the result lands. */
+        .ai-busy { animation: aibusy 1.1s ease-in-out infinite; }
+        @keyframes aibusy { 50% { opacity: 0.4; } }
     </style>
 </head>
 <body>
@@ -64,6 +109,11 @@
         <button onclick="addCol()">+ Col</button>
     </div>
     <div id="editor" contenteditable="true" data-placeholder="Start writing, press Tab to accept AI suggestions..."></div>
+
+    <!-- Block handle (⋮⋮) and the Notion-style block context menu. They live
+         outside the contenteditable so interacting with them never edits text. -->
+    <div id="handle" title="Block actions">⋮⋮</div>
+    <div id="blockmenu"></div>
 
     <script>
         const editor = document.getElementById('editor');
@@ -99,6 +149,11 @@
             if (msg.action === 'load') { epoch = msg.epoch || 0; window.loadContent(msg.html, !!msg.keepHistory); }
             else if (msg.action === 'theme') window.setTheme(msg.theme);
             else if (msg.action === 'complete') window.applyCompletion(msg.id, msg.text);
+            // Block-scoped AI result; only applies if we're still on the same note.
+            else if (msg.action === 'blockAiResult') {
+                if ((msg.epoch || 0) === epoch) window.applyBlockAi(msg.id, msg.html, msg.error);
+                else delete pendingAiBlocks[msg.id];
+            }
         };
 
         // C# calls this right before saving: cancel any pending debounced change
@@ -151,6 +206,10 @@
             clearTimeout(idleTimer);
             window.__outbox = window.__outbox.filter(m => m.type !== 'changed');
             removeGhost();
+            // A different (or reloaded) note invalidates the block menu and any
+            // in-flight block AI request targeting the old DOM.
+            closeMenu();
+            for (const k of Object.keys(pendingAiBlocks)) delete pendingAiBlocks[k];
             if (keepHistory) {
                 // Same note, new content (an AI edit): commit the pre-edit state
                 // first so a single undo restores it.
@@ -330,6 +389,350 @@
             notifyChanged();
         }
 
+        // ---- Notion-style block menu ----------------------------------------
+        // A "block" is a direct child of #editor, except inside lists where each
+        // <li> is its own block (like Notion bullets). The ⋮⋮ handle appears in
+        // the gutter of the hovered block; clicking it (or right-clicking the
+        // block) opens the action menu.
+        const handle = document.getElementById('handle');
+        const menu = document.getElementById('blockmenu');
+        let menuBlock = null;        // block the open menu is acting on
+        let hoverBlock = null;       // block currently showing the handle
+        let aiBlockSeq = 0;
+        const pendingAiBlocks = {};  // request id -> block awaiting an AI result
+
+        function menuOpen() { return menu.style.display === 'block'; }
+
+        // The block containing a DOM node (innermost li wins), or null.
+        function blockOf(node) {
+            let el = node && (node.nodeType === 1 ? node : node.parentElement);
+            if (!el || !editor.contains(el) || el === editor) return null;
+            let cur = el, li = null;
+            while (cur && cur.parentElement !== editor) {
+                if (!li && cur.tagName === 'LI') li = cur;
+                cur = cur.parentElement;
+            }
+            if (!cur || (cur.classList && cur.classList.contains('ghost'))) return null;
+            return li || cur;
+        }
+
+        // The block nearest to a viewport Y (for gutter hover, where the pointer
+        // isn't over the text itself).
+        function blockAtY(y) {
+            let best = null, bestDist = Infinity;
+            for (const top of editor.children) {
+                const units = (top.tagName === 'UL' || top.tagName === 'OL') ? [...top.children] : [top];
+                for (const u of units) {
+                    const r = u.getBoundingClientRect();
+                    if (y >= r.top && y <= r.bottom) return u;
+                    const d = y < r.top ? r.top - y : y - r.bottom;
+                    if (d < bestDist) { bestDist = d; best = u; }
+                }
+            }
+            return bestDist <= 28 ? best : null;
+        }
+
+        // ---- Block operations (each commits an undo step + notifies C#) ----
+        function afterBlockEdit() { notifyChanged(); pushHistory(); }
+
+        function setSelectionToBlock(b) {
+            editor.focus();
+            const sel = window.getSelection();
+            const range = document.createRange();
+            range.selectNodeContents(b);
+            sel.removeAllRanges();
+            sel.addRange(range);
+        }
+        function placeCaretAtEndOf(el) {
+            editor.focus();
+            const sel = window.getSelection();
+            const range = document.createRange();
+            range.selectNodeContents(el);
+            range.collapse(false);
+            sel.removeAllRanges();
+            sel.addRange(range);
+        }
+
+        function turnInto(b, kind) {
+            if (b.tagName === 'TABLE') return;
+            removeGhost();
+            setSelectionToBlock(b);
+            if (kind === 'UL') {
+                if (b.tagName !== 'LI') document.execCommand('insertUnorderedList');
+            } else {
+                // Lift list items out of the list before changing the block tag.
+                if (b.tagName === 'LI') document.execCommand('insertUnorderedList');
+                document.execCommand('formatBlock', false, kind);
+            }
+            afterBlockEdit();
+        }
+
+        function duplicateBlock(b) {
+            removeGhost();
+            const copy = b.cloneNode(true);
+            if (copy.querySelectorAll) copy.querySelectorAll('.ghost').forEach(g => g.remove());
+            b.after(copy);
+            placeCaretAtEndOf(copy);
+            afterBlockEdit();
+        }
+
+        function moveBlock(b, dir) {
+            const sib = dir < 0 ? b.previousElementSibling : b.nextElementSibling;
+            if (!sib) return;                    // already at the edge
+            if (dir < 0) sib.before(b); else sib.after(b);
+            placeCaretAtEndOf(b);
+            afterBlockEdit();
+        }
+
+        function deleteBlock(b) {
+            removeGhost();
+            const parent = b.parentElement;
+            b.remove();
+            // Removing the last bullet leaves an empty <ul>; drop it too.
+            if (parent && (parent.tagName === 'UL' || parent.tagName === 'OL') && parent.children.length === 0) {
+                parent.remove();
+            }
+            editor.focus();
+            afterBlockEdit();
+        }
+
+        function copyBlock(b) {
+            const txt = b.innerText;
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(txt).catch(() => legacyCopy(b));
+            } else { legacyCopy(b); }
+        }
+        function legacyCopy(b) { setSelectionToBlock(b); document.execCommand('copy'); }
+
+        // Notion-ish palette; values chosen to stay readable on light and dark themes.
+        const TEXT_COLORS = [
+            ['Default', ''], ['Gray', '#9b9b9b'], ['Orange', '#d9730d'], ['Yellow', '#cb9d06'],
+            ['Green', '#2e9e83'], ['Blue', '#5b8def'], ['Purple', '#9d68e3'], ['Pink', '#d15796'], ['Red', '#e35958']];
+        // Background swatches are the text colors at low alpha, so they read on
+        // any theme.
+        const BG_COLORS = TEXT_COLORS.map(([n, c]) => [n, c === '' ? '' :
+            'rgba(' + parseInt(c.slice(1, 3), 16) + ',' + parseInt(c.slice(3, 5), 16) + ',' + parseInt(c.slice(5, 7), 16) + ',0.22)']);
+        function setBlockColor(b, c) { b.style.color = c; afterBlockEdit(); }
+        function setBlockBg(b, c) {
+            b.style.backgroundColor = c;
+            b.style.borderRadius = c ? '4px' : '';
+            afterBlockEdit();
+        }
+
+        // Block-scoped AI: sends the block's text + instruction to C#, which runs
+        // it through the same rewrite pipeline as the AI panel. The block pulses
+        // until the result replaces it (undoable with a single Ctrl+Z).
+        function runBlockAi(b, instruction) {
+            instruction = (instruction || '').trim();
+            if (!instruction) return;
+            const id = ++aiBlockSeq;
+            pendingAiBlocks[id] = b;
+            b.classList.add('ai-busy');
+            send({ type: 'blockAi', id: id, epoch: epoch, text: b.innerText, instruction: instruction });
+        }
+        window.applyBlockAi = function (id, html, error) {
+            const b = pendingAiBlocks[id];
+            delete pendingAiBlocks[id];
+            if (!b || !editor.contains(b)) return;
+            b.classList.remove('ai-busy');
+            if (error || !html) return;
+            pushHistory();               // snapshot pre-edit: one undo restores it
+            const t = document.createElement('template');
+            t.innerHTML = sanitize(html);
+            const nodes = [...t.content.childNodes];
+            if (b.tagName === 'LI') {
+                // Keep list structure: a returned list splices its items in place;
+                // anything else becomes the bullet's new inline content.
+                if (nodes.length === 1 && (nodes[0].tagName === 'UL' || nodes[0].tagName === 'OL')) {
+                    b.replaceWith(...[...nodes[0].children]);
+                } else {
+                    const tmp = document.createElement('div');
+                    nodes.forEach(n => tmp.appendChild(n));
+                    b.innerHTML = tmp.innerHTML.replace(/<\/?(p|div)[^>]*>/gi, ' ').trim() || tmp.textContent;
+                }
+            } else {
+                b.replaceWith(...nodes);
+            }
+            afterBlockEdit();
+        };
+
+        // ---- Menu UI ----
+        const MENU_ACTIONS = [
+            { icon: '⇄', label: 'Turn into', page: 'turninto' },
+            { icon: '◐', label: 'Color', page: 'color' },
+            { icon: '❏', label: 'Copy block', run: copyBlock },
+            { icon: '❐', label: 'Duplicate', kbd: 'Ctrl+D', run: duplicateBlock },
+            { icon: '↑', label: 'Move up', kbd: 'Alt+↑', run: b => moveBlock(b, -1) },
+            { icon: '↓', label: 'Move down', kbd: 'Alt+↓', run: b => moveBlock(b, 1) },
+            { icon: '✕', label: 'Delete', danger: true, run: deleteBlock },
+            { icon: '✦', label: 'Ask AI', kbd: 'Ctrl+J', page: 'ai' },
+        ];
+        const TURN_INTO = [
+            { label: 'Text', kind: 'P' }, { label: 'Heading 1', kind: 'H1' },
+            { label: 'Heading 2', kind: 'H2' }, { label: 'Bulleted list', kind: 'UL' }];
+
+        function mkItem(icon, label, extra) {
+            const it = document.createElement('div');
+            it.className = 'bm-item' + (extra && extra.danger ? ' bm-danger' : '');
+            const ic = document.createElement('span'); ic.className = 'bm-icon'; ic.textContent = icon;
+            const lb = document.createElement('span'); lb.textContent = label;
+            it.append(ic, lb);
+            if (extra && extra.kbd) { const k = document.createElement('span'); k.className = 'bm-kbd'; k.textContent = extra.kbd; it.append(k); }
+            if (extra && extra.chev) { const c = document.createElement('span'); c.className = 'bm-chev'; c.textContent = '›'; it.append(c); }
+            return it;
+        }
+
+        function renderMenu(page) {
+            menu.innerHTML = '';
+            const b = menuBlock;
+            if (page === 'root') {
+                const search = document.createElement('input');
+                search.className = 'bm-input';
+                search.placeholder = 'Search actions...';
+                menu.append(search);
+                const list = document.createElement('div');
+                menu.append(list);
+                const fill = (filter) => {
+                    list.innerHTML = '';
+                    const f = (filter || '').toLowerCase();
+                    for (const a of MENU_ACTIONS) {
+                        if (a.label === 'Turn into' && b.tagName === 'TABLE') continue;
+                        if (!f || a.label.toLowerCase().includes(f)) {
+                            const it = mkItem(a.icon, a.label, { kbd: a.kbd, danger: a.danger, chev: !!a.page });
+                            it.onmousedown = (e) => { e.preventDefault(); a.page ? renderMenu(a.page) : (closeMenu(), a.run(b)); };
+                            list.append(it);
+                        }
+                    }
+                    // Searching also surfaces the Turn-into targets directly.
+                    if (f && b.tagName !== 'TABLE') {
+                        for (const t of TURN_INTO.filter(t => t.label.toLowerCase().includes(f))) {
+                            const it = mkItem('⇄', t.label, {});
+                            it.onmousedown = (e) => { e.preventDefault(); closeMenu(); turnInto(b, t.kind); };
+                            list.append(it);
+                        }
+                    }
+                };
+                fill('');
+                search.oninput = () => fill(search.value);
+                search.onkeydown = (e) => {
+                    if (e.key === 'Escape') { closeMenu(); }
+                    if (e.key === 'Enter') {
+                        const first = list.querySelector('.bm-item');
+                        if (first) first.dispatchEvent(new MouseEvent('mousedown'));
+                    }
+                    e.stopPropagation();
+                };
+                setTimeout(() => search.focus(), 0);
+            } else if (page === 'turninto') {
+                menu.append(backRow());
+                for (const t of TURN_INTO) {
+                    const it = mkItem('⇄', t.label, {});
+                    it.onmousedown = (e) => { e.preventDefault(); closeMenu(); turnInto(b, t.kind); };
+                    menu.append(it);
+                }
+            } else if (page === 'color') {
+                menu.append(backRow());
+                const t1 = document.createElement('div'); t1.className = 'bm-title'; t1.textContent = 'TEXT COLOR';
+                menu.append(t1, swatches(TEXT_COLORS, c => setBlockColor(b, c), false));
+                const t2 = document.createElement('div'); t2.className = 'bm-title'; t2.textContent = 'BACKGROUND';
+                menu.append(t2, swatches(BG_COLORS, c => setBlockBg(b, c), true));
+            } else if (page === 'ai') {
+                menu.append(backRow());
+                const input = document.createElement('input');
+                input.className = 'bm-input';
+                input.placeholder = 'Tell AI what to do with this block...';
+                input.onkeydown = (e) => {
+                    if (e.key === 'Enter' && input.value.trim()) { const v = input.value; closeMenu(); runBlockAi(b, v); }
+                    if (e.key === 'Escape') closeMenu();
+                    e.stopPropagation();
+                };
+                menu.append(input);
+                setTimeout(() => input.focus(), 0);
+            }
+            clampMenu();
+        }
+        function backRow() {
+            const it = mkItem('‹', 'Back', {});
+            it.onmousedown = (e) => { e.preventDefault(); renderMenu('root'); };
+            return it;
+        }
+        function swatches(colors, apply, isBg) {
+            const grid = document.createElement('div');
+            grid.className = 'bm-swatches';
+            for (const [name, c] of colors) {
+                const s = document.createElement('div');
+                s.className = 'bm-swatch';
+                s.title = name;
+                if (c === '') { s.textContent = '✕'; }
+                else if (isBg) { s.style.background = c; }
+                else { s.style.color = c; s.textContent = 'A'; }
+                s.onmousedown = (e) => { e.preventDefault(); closeMenu(); apply(c); };
+                grid.append(s);
+            }
+            return grid;
+        }
+
+        function openMenu(x, y, block, page) {
+            if (!block) return;
+            menuBlock = block;
+            menu.style.display = 'block';
+            menu.style.left = x + 'px';
+            menu.style.top = y + 'px';
+            renderMenu(page || 'root');
+            handle.style.display = 'none';
+        }
+        function clampMenu() {
+            const r = menu.getBoundingClientRect();
+            if (r.right > innerWidth - 8) menu.style.left = Math.max(8, innerWidth - 8 - r.width) + 'px';
+            if (r.bottom > innerHeight - 8) menu.style.top = Math.max(8, innerHeight - 8 - r.height) + 'px';
+        }
+        function closeMenu() {
+            menu.style.display = 'none';
+            menu.innerHTML = '';
+            menuBlock = null;
+        }
+
+        // ---- Handle + menu wiring ----
+        document.addEventListener('mousemove', (e) => {
+            if (menuOpen()) return;
+            const er = editor.getBoundingClientRect();
+            if (e.clientY < er.top || e.clientY > er.bottom ||
+                e.clientX < er.left - 44 || e.clientX > er.right) {
+                handle.style.display = 'none'; hoverBlock = null;
+                return;
+            }
+            const b = blockAtY(e.clientY);
+            if (!b) { handle.style.display = 'none'; hoverBlock = null; return; }
+            hoverBlock = b;
+            const r = b.getBoundingClientRect();
+            handle.style.display = 'flex';
+            handle.style.left = Math.max(2, r.left - 26) + 'px';
+            handle.style.top = (r.top + 1) + 'px';
+        });
+        handle.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            const r = handle.getBoundingClientRect();
+            openMenu(r.left, r.bottom + 4, hoverBlock);
+        });
+        editor.addEventListener('contextmenu', (e) => {
+            const b = blockOf(e.target) || blockAtY(e.clientY);
+            if (!b) return;              // empty note: keep the native menu
+            e.preventDefault();
+            openMenu(e.clientX, e.clientY, b);
+        });
+        // Menu-internal clicks must never reach the outside-click closer below:
+        // submenu navigation re-renders the menu, detaching the clicked row, so
+        // by the time the event bubbles to document, contains() would be false
+        // and the menu would close instead of navigating.
+        menu.addEventListener('mousedown', (e) => e.stopPropagation());
+        document.addEventListener('mousedown', (e) => {
+            if (menuOpen() && !menu.contains(e.target) && e.target !== handle) closeMenu();
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && menuOpen()) closeMenu();
+        });
+        window.addEventListener('scroll', () => { closeMenu(); handle.style.display = 'none'; }, true);
+
         // ---- Events ----
         editor.addEventListener('keydown', (e) => {
             // Standard editing shortcuts (Cmd on macOS, Ctrl on Windows).
@@ -341,7 +744,25 @@
                 if (k === 'b') { e.preventDefault(); fmt('bold'); return; }
                 if (k === 'i') { e.preventDefault(); fmt('italic'); return; }
                 if (k === 'u') { e.preventDefault(); fmt('underline'); return; }
+                // Block shortcuts (match the labels in the block menu).
+                if (k === 'd') {
+                    e.preventDefault();
+                    const b = blockOf(window.getSelection().anchorNode);
+                    if (b) duplicateBlock(b);
+                    return;
+                }
+                if (k === 'j') {
+                    e.preventDefault();
+                    const b = blockOf(window.getSelection().anchorNode);
+                    if (b) { const r = b.getBoundingClientRect(); openMenu(r.left, r.bottom + 4, b, 'ai'); }
+                    return;
+                }
                 // Everything else (Cmd+A/C/V/X...) keeps its native behavior.
+            }
+            // Alt+↑ / Alt+↓ move the current block, like the menu's Move up/down.
+            if (e.altKey && !mod && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+                const b = blockOf(window.getSelection().anchorNode);
+                if (b) { e.preventDefault(); moveBlock(b, e.key === 'ArrowUp' ? -1 : 1); return; }
             }
             if (e.key === 'Tab') {
                 // Always handle Tab ourselves so it never moves focus / jumps the caret.
