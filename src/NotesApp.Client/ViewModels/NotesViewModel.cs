@@ -234,10 +234,17 @@ public partial class NotesViewModel : ObservableObject
                 try
                 {
                     Notes.Move(index, 0);
-                    if (SelectedNote != target)
+
+                    // The clear can be raised synchronously inside Move or via a
+                    // queued binding update; yield one dispatcher turn so a
+                    // deferred clear also lands while the guard is up.
+                    await Task.Yield();
+
+                    // Restore only from null so a REAL selection change the user
+                    // made in this window is never fought. Backing-field write:
+                    // the property setter would reload the editor mid-typing.
+                    if (SelectedNote is null)
                     {
-                        // Restore via the backing field: the property setter would
-                        // reload the editor and reset the caret mid-typing.
 #pragma warning disable MVVMTK0034 // deliberate bypass of the generated setter (see above)
                         selectedNote = target;
 #pragma warning restore MVVMTK0034
@@ -375,8 +382,10 @@ public partial class NotesViewModel : ObservableObject
         // WinUI clears the CollectionView selection while a Notes.Move is in
         // flight (auto-save bubbling the note to the top). That deselection is
         // spurious - ignore it, or it would blank the editor mid-edit. The
-        // selection is restored right after the Move.
-        if (_bubblingNote)
+        // selection is restored right after the Move. Only NULL transitions are
+        // swallowed: a real click on another note during the guard window must
+        // still be honored.
+        if (_bubblingNote && newValue is null)
         {
             return;
         }

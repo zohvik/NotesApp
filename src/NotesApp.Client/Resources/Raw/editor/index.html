@@ -152,7 +152,7 @@
             // Block-scoped AI result; only applies if we're still on the same note.
             else if (msg.action === 'blockAiResult') {
                 if ((msg.epoch || 0) === epoch) window.applyBlockAi(msg.id, msg.html, msg.error);
-                else delete pendingAiBlocks[msg.id];
+                else finishBlockAi(msg.id);
             }
         };
 
@@ -184,10 +184,16 @@
             return doc.body.innerHTML;
         }
 
-        // Return the editor HTML with any ghost text stripped out.
+        // Return the editor HTML with any ghost text stripped out. The ai-busy
+        // pending marker is presentation-only state — strip it too, or a save
+        // that fires mid-request would persist a forever-pulsing block.
         function getContent() {
             const clone = editor.cloneNode(true);
             clone.querySelectorAll('.ghost').forEach(g => g.remove());
+            clone.querySelectorAll('.ai-busy').forEach(el => {
+                el.classList.remove('ai-busy');
+                if (!el.getAttribute('class')) el.removeAttribute('class');
+            });
             return clone.innerHTML;
         }
 
@@ -209,7 +215,7 @@
             // A different (or reloaded) note invalidates the block menu and any
             // in-flight block AI request targeting the old DOM.
             closeMenu();
-            for (const k of Object.keys(pendingAiBlocks)) delete pendingAiBlocks[k];
+            for (const k of Object.keys(pendingAiBlocks)) finishBlockAi(k);
             if (keepHistory) {
                 // Same note, new content (an AI edit): commit the pre-edit state
                 // first so a single undo restores it.
@@ -344,15 +350,7 @@
         function redo() {
             if (hIndex < hist.length - 1) { hIndex++; restore(hist[hIndex]); }
         }
-        function placeCaretAtEnd() {
-            editor.focus();
-            const sel = window.getSelection();
-            const range = document.createRange();
-            range.selectNodeContents(editor);
-            range.collapse(false);
-            sel.removeAllRanges();
-            sel.addRange(range);
-        }
+        function placeCaretAtEnd() { placeCaretAtEndOf(editor); }
 
         // ---- Toolbar actions ----
         function fmt(cmd) { editor.focus(); document.execCommand(cmd, false, null); notifyChanged(); }
@@ -403,6 +401,14 @@
 
         function menuOpen() { return menu.style.display === 'block'; }
 
+        // Tags the menu can act on. Bare text nodes, <br>s, and inline elements
+        // at the editor root (plain-text notes render as 'line<br>line'; the
+        // first line typed into an empty note is a bare text node) are NOT
+        // blocks — treating them as blocks made Delete/Duplicate act on a <br>
+        // and merge unrelated lines. They become blocks via normalizeEditorBlocks.
+        const BLOCK_TAGS = new Set(['DIV', 'P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6',
+                                    'UL', 'OL', 'LI', 'TABLE', 'BLOCKQUOTE', 'PRE']);
+
         // The block containing a DOM node (innermost li wins), or null.
         function blockOf(node) {
             let el = node && (node.nodeType === 1 ? node : node.parentElement);
@@ -413,7 +419,8 @@
                 cur = cur.parentElement;
             }
             if (!cur || (cur.classList && cur.classList.contains('ghost'))) return null;
-            return li || cur;
+            const found = li || cur;
+            return BLOCK_TAGS.has(found.tagName) ? found : null;
         }
 
         // The block nearest to a viewport Y (for gutter hover, where the pointer
@@ -421,6 +428,7 @@
         function blockAtY(y) {
             let best = null, bestDist = Infinity;
             for (const top of editor.children) {
+                if (!BLOCK_TAGS.has(top.tagName)) continue;
                 const units = (top.tagName === 'UL' || top.tagName === 'OL') ? [...top.children] : [top];
                 for (const u of units) {
                     const r = u.getBoundingClientRect();
@@ -432,36 +440,70 @@
             return bestDist <= 28 ? best : null;
         }
 
+        // Wraps bare text/inline runs at the editor root into <div> blocks
+        // (dropping the <br> separators — div boundaries replace them), so the
+        // block menu can work on plain-text-origin notes. Runs on demand from
+        // the context menu, never on load or hover, so it can't disturb typing.
+        function normalizeEditorBlocks() {
+            let changed = false;
+            let run = [];
+            const flush = (before) => {
+                if (run.length === 0) return;
+                const div = document.createElement('div');
+                editor.insertBefore(div, before);
+                run.forEach(n => div.appendChild(n));
+                run = [];
+                changed = true;
+            };
+            for (const n of [...editor.childNodes]) {
+                const isBlock = n.nodeType === 1 && BLOCK_TAGS.has(n.tagName);
+                const isBr = n.nodeType === 1 && n.tagName === 'BR';
+                if (isBlock) { flush(n); }
+                else if (isBr) { flush(n); n.remove(); changed = true; }
+                else if (n.nodeType === 3 && !n.textContent.trim()) { /* skip whitespace */ }
+                else { run.push(n); }
+            }
+            flush(null);
+            if (changed) { notifyChanged(); pushHistory(); }
+            return changed;
+        }
+
         // ---- Block operations (each commits an undo step + notifies C#) ----
         function afterBlockEdit() { notifyChanged(); pushHistory(); }
 
-        function setSelectionToBlock(b) {
-            editor.focus();
-            const sel = window.getSelection();
-            const range = document.createRange();
-            range.selectNodeContents(b);
-            sel.removeAllRanges();
-            sel.addRange(range);
-        }
-        function placeCaretAtEndOf(el) {
+        // Single selection-to-range idiom for the whole editor: select an
+        // element's contents, optionally collapsed to a caret at its end.
+        function selectContents(el, collapseToEnd) {
             editor.focus();
             const sel = window.getSelection();
             const range = document.createRange();
             range.selectNodeContents(el);
-            range.collapse(false);
+            if (collapseToEnd) range.collapse(false);
             sel.removeAllRanges();
             sel.addRange(range);
         }
+        function setSelectionToBlock(b) { selectContents(b, false); }
+        function placeCaretAtEndOf(el) { selectContents(el, true); }
 
         function turnInto(b, kind) {
             if (b.tagName === 'TABLE') return;
             removeGhost();
             setSelectionToBlock(b);
+            // A list item is lifted out with the command matching its OWN list
+            // type — running insertUnorderedList on an <ol> item would convert
+            // the list instead of unlisting the item.
+            const liftCmd = b.tagName === 'LI' && b.parentElement && b.parentElement.tagName === 'OL'
+                ? 'insertOrderedList' : 'insertUnorderedList';
             if (kind === 'UL') {
-                if (b.tagName !== 'LI') document.execCommand('insertUnorderedList');
+                if (b.tagName === 'LI') {
+                    if (liftCmd === 'insertUnorderedList') return; // already a bullet
+                    document.execCommand(liftCmd);                 // out of the numbered list...
+                    document.execCommand('insertUnorderedList');   // ...and into a bulleted one
+                } else {
+                    document.execCommand('insertUnorderedList');
+                }
             } else {
-                // Lift list items out of the list before changing the block tag.
-                if (b.tagName === 'LI') document.execCommand('insertUnorderedList');
+                if (b.tagName === 'LI') document.execCommand(liftCmd);
                 document.execCommand('formatBlock', false, kind);
             }
             afterBlockEdit();
@@ -525,21 +567,35 @@
         function runBlockAi(b, instruction) {
             instruction = (instruction || '').trim();
             if (!instruction) return;
+            removeGhost();               // never send a not-accepted suggestion as the user's text
             const id = ++aiBlockSeq;
-            pendingAiBlocks[id] = b;
+            // Failsafe: if the reply is ever lost (the bridge send is best-effort),
+            // clear the pending state instead of pulsing forever. 150s exceeds the
+            // C# AI HttpClient's 2-minute timeout with slack.
+            const timer = setTimeout(() => finishBlockAi(id), 150000);
+            pendingAiBlocks[id] = { block: b, timer: timer };
             b.classList.add('ai-busy');
             send({ type: 'blockAi', id: id, epoch: epoch, text: b.innerText, instruction: instruction });
         }
-        window.applyBlockAi = function (id, html, error) {
-            const b = pendingAiBlocks[id];
+        // Retires a pending block-AI request: clears its failsafe timer and busy
+        // state, and returns the target block (null if unknown/already retired).
+        function finishBlockAi(id) {
+            const p = pendingAiBlocks[id];
+            if (!p) return null;
+            clearTimeout(p.timer);
             delete pendingAiBlocks[id];
-            if (!b || !editor.contains(b)) return;
-            b.classList.remove('ai-busy');
-            if (error || !html) return;
-            pushHistory();               // snapshot pre-edit: one undo restores it
+            if (p.block && p.block.classList) p.block.classList.remove('ai-busy');
+            return p.block;
+        }
+        window.applyBlockAi = function (id, html, error) {
+            const b = finishBlockAi(id);
+            if (!b || !editor.contains(b) || error || !html) return;
             const t = document.createElement('template');
             t.innerHTML = sanitize(html);
             const nodes = [...t.content.childNodes];
+            // A reply that sanitizes to nothing must not DELETE the block below.
+            if (nodes.length === 0 || (!t.content.textContent.trim() && !t.content.querySelector('table'))) return;
+            pushHistory();               // snapshot pre-edit: one undo restores it
             if (b.tagName === 'LI') {
                 // Keep list structure: a returned list splices its items in place;
                 // anything else becomes the bullet's new inline content.
@@ -548,7 +604,7 @@
                 } else {
                     const tmp = document.createElement('div');
                     nodes.forEach(n => tmp.appendChild(n));
-                    b.innerHTML = tmp.innerHTML.replace(/<\/?(p|div)[^>]*>/gi, ' ').trim() || tmp.textContent;
+                    b.innerHTML = tmp.innerHTML.replace(/<\/?(p|div)(?=[\s/>])[^>]*>/gi, ' ').trim() || tmp.textContent;
                 }
             } else {
                 b.replaceWith(...nodes);
@@ -570,6 +626,17 @@
         const TURN_INTO = [
             { label: 'Text', kind: 'P' }, { label: 'Heading 1', kind: 'H1' },
             { label: 'Heading 2', kind: 'H2' }, { label: 'Bulleted list', kind: 'UL' }];
+
+        // One builder for a 'Turn into <kind>' row, shared by the submenu page
+        // and the search results so the two can never drift apart.
+        function turnIntoItem(t, b) {
+            const it = mkItem('⇄', t.label, {});
+            it.onmousedown = (e) => { e.preventDefault(); closeMenu(); turnInto(b, t.kind); };
+            return it;
+        }
+
+        // The block containing the caret, if any (shared by keyboard shortcuts).
+        function caretBlock() { return blockOf(window.getSelection().anchorNode); }
 
         function mkItem(icon, label, extra) {
             const it = document.createElement('div');
@@ -606,9 +673,7 @@
                     // Searching also surfaces the Turn-into targets directly.
                     if (f && b.tagName !== 'TABLE') {
                         for (const t of TURN_INTO.filter(t => t.label.toLowerCase().includes(f))) {
-                            const it = mkItem('⇄', t.label, {});
-                            it.onmousedown = (e) => { e.preventDefault(); closeMenu(); turnInto(b, t.kind); };
-                            list.append(it);
+                            list.append(turnIntoItem(t, b));
                         }
                     }
                 };
@@ -626,9 +691,7 @@
             } else if (page === 'turninto') {
                 menu.append(backRow());
                 for (const t of TURN_INTO) {
-                    const it = mkItem('⇄', t.label, {});
-                    it.onmousedown = (e) => { e.preventDefault(); closeMenu(); turnInto(b, t.kind); };
-                    menu.append(it);
+                    menu.append(turnIntoItem(t, b));
                 }
             } else if (page === 'color') {
                 menu.append(backRow());
@@ -693,29 +756,46 @@
         }
 
         // ---- Handle + menu wiring ----
+        // rAF-gated: blockAtY measures every block's rect, so running it on raw
+        // mousemove (which can fire far faster than the frame rate) would force
+        // layout repeatedly per frame on long notes.
+        let handleRaf = 0;
         document.addEventListener('mousemove', (e) => {
+            if (handleRaf) return;
+            const x = e.clientX, y = e.clientY;
+            handleRaf = requestAnimationFrame(() => {
+                handleRaf = 0;
+                updateHandle(x, y);
+            });
+        });
+        function updateHandle(x, y) {
             if (menuOpen()) return;
             const er = editor.getBoundingClientRect();
-            if (e.clientY < er.top || e.clientY > er.bottom ||
-                e.clientX < er.left - 44 || e.clientX > er.right) {
+            if (y < er.top || y > er.bottom || x < er.left - 44 || x > er.right) {
                 handle.style.display = 'none'; hoverBlock = null;
                 return;
             }
-            const b = blockAtY(e.clientY);
+            const b = blockAtY(y);
             if (!b) { handle.style.display = 'none'; hoverBlock = null; return; }
             hoverBlock = b;
             const r = b.getBoundingClientRect();
             handle.style.display = 'flex';
             handle.style.left = Math.max(2, r.left - 26) + 'px';
             handle.style.top = (r.top + 1) + 'px';
-        });
+        }
         handle.addEventListener('mousedown', (e) => {
             e.preventDefault();
             const r = handle.getBoundingClientRect();
             openMenu(r.left, r.bottom + 4, hoverBlock);
         });
         editor.addEventListener('contextmenu', (e) => {
-            const b = blockOf(e.target) || blockAtY(e.clientY);
+            let b = blockOf(e.target) || blockAtY(e.clientY);
+            // Bare text at the editor root isn't a block yet; wrap it into real
+            // blocks once (explicit user intent, so rewriting the DOM is safe),
+            // then look again.
+            if (!b && normalizeEditorBlocks()) {
+                b = blockOf(e.target) || blockAtY(e.clientY);
+            }
             if (!b) return;              // empty note: keep the native menu
             e.preventDefault();
             openMenu(e.clientX, e.clientY, b);
@@ -747,13 +827,13 @@
                 // Block shortcuts (match the labels in the block menu).
                 if (k === 'd') {
                     e.preventDefault();
-                    const b = blockOf(window.getSelection().anchorNode);
+                    const b = caretBlock();
                     if (b) duplicateBlock(b);
                     return;
                 }
                 if (k === 'j') {
                     e.preventDefault();
-                    const b = blockOf(window.getSelection().anchorNode);
+                    const b = caretBlock();
                     if (b) { const r = b.getBoundingClientRect(); openMenu(r.left, r.bottom + 4, b, 'ai'); }
                     return;
                 }
@@ -761,7 +841,7 @@
             }
             // Alt+↑ / Alt+↓ move the current block, like the menu's Move up/down.
             if (e.altKey && !mod && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
-                const b = blockOf(window.getSelection().anchorNode);
+                const b = caretBlock();
                 if (b) { e.preventDefault(); moveBlock(b, e.key === 'ArrowUp' ? -1 : 1); return; }
             }
             if (e.key === 'Tab') {
