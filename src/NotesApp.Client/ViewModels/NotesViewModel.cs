@@ -119,6 +119,7 @@ public partial class NotesViewModel : ObservableObject
     private CancellationTokenSource? _autoSaveCts;
     private bool _autoSavePending;
     private bool _loadingNote; // true while a note is being loaded INTO the edit fields
+    private bool _bubblingNote; // true while Notes.Move bubbles the saved note to the top
 
     partial void OnEditTitleChanged(string value) => ScheduleAutoSave();
     partial void OnEditBodyChanged(string value) => ScheduleAutoSave();
@@ -233,11 +234,37 @@ public partial class NotesViewModel : ObservableObject
             }
 
             // Keep the list sorted by last edited: bubble the note to the top.
-            // Move (not remove+insert) preserves the CollectionView selection.
+            // On Mac, Move preserves the CollectionView selection; on Windows it
+            // CLEARS it, which would cascade into blanking the editor mid-edit.
+            // So suppress the transient deselection and restore the selection.
             var index = Notes.IndexOf(target);
             if (index > 0)
             {
-                Notes.Move(index, 0);
+                _bubblingNote = true;
+                try
+                {
+                    Notes.Move(index, 0);
+
+                    // The clear can be raised synchronously inside Move or via a
+                    // queued binding update; yield one dispatcher turn so a
+                    // deferred clear also lands while the guard is up.
+                    await Task.Yield();
+
+                    // Restore only from null so a REAL selection change the user
+                    // made in this window is never fought. Backing-field write:
+                    // the property setter would reload the editor mid-typing.
+                    if (SelectedNote is null)
+                    {
+#pragma warning disable MVVMTK0034 // deliberate bypass of the generated setter (see above)
+                        selectedNote = target;
+#pragma warning restore MVVMTK0034
+                        OnPropertyChanged(nameof(SelectedNote));
+                    }
+                }
+                finally
+                {
+                    _bubblingNote = false;
+                }
             }
         }
 
@@ -365,6 +392,17 @@ public partial class NotesViewModel : ObservableObject
 
     partial void OnSelectedNoteChanged(Note? oldValue, Note? newValue)
     {
+        // WinUI clears the CollectionView selection while a Notes.Move is in
+        // flight (auto-save bubbling the note to the top). That deselection is
+        // spurious - ignore it, or it would blank the editor mid-edit. The
+        // selection is restored right after the Move. Only NULL transitions are
+        // swallowed: a real click on another note during the guard window must
+        // still be honored.
+        if (_bubblingNote && newValue is null)
+        {
+            return;
+        }
+
         // The edit fields still hold the PREVIOUS note's text here - commit any
         // pending auto-save for it before they get overwritten below.
         _ = FlushAutoSaveAsync(oldValue, EditTitle, EditBody, EditTags);
@@ -411,12 +449,30 @@ public partial class NotesViewModel : ObservableObject
         try
         {
             await _db.Database.EnsureCreatedAsync();
+            await PatchSchemaAsync();
             await LoadFoldersCoreAsync();
             await LoadNotesCoreAsync();
         }
         finally
         {
             _dbLock.Release();
+        }
+    }
+
+    // EnsureCreated only builds brand-new databases; it never alters existing
+    // ones, and the client has no EF migrations. So a database created before a
+    // column existed (e.g. IsFavorite shipped after this PC's db was made) is
+    // missing it and every Notes query would fail. Patch such columns in here.
+    private async Task PatchSchemaAsync()
+    {
+        var hasIsFavorite = (await _db.Database
+            .SqlQueryRaw<int>("SELECT COUNT(*) AS Value FROM pragma_table_info('Notes') WHERE name = 'IsFavorite'")
+            .ToListAsync())[0] > 0;
+
+        if (!hasIsFavorite)
+        {
+            await _db.Database.ExecuteSqlRawAsync(
+                "ALTER TABLE Notes ADD COLUMN IsFavorite INTEGER NOT NULL DEFAULT 0");
         }
     }
 

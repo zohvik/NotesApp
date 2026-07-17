@@ -25,6 +25,12 @@
 		<RootNamespace>NotesApp.Client</RootNamespace>
 		<UseMaui>true</UseMaui>
 
+		<!-- Pin MAUI to a current service release instead of the (older) version the
+		     installed VS workload defaults to. The workload's 10.0.20 has a Windows
+		     bug where CollectionView items realize but never render their template
+		     content, so folder names and note titles show as blank rows. -->
+		<MauiVersion>10.0.80</MauiVersion>
+
 		<!-- HybridWebView (our rich note editor) uses dynamic System.Text.Json and is
 		     stripped by the trimmer unless this feature switch is set. Without it the
 		     window.HybridWebView bridge is never injected, so no messages cross
