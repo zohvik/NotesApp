@@ -724,18 +724,23 @@
         // The block nearest to a viewport Y (for gutter hover, where the pointer
         // isn't over the text itself).
         function blockAtY(y) {
-            let best = null, bestDist = Infinity;
+            // Lists contribute every descendant <li> (nested bullets included).
+            // Among direct hits the LAST in document order wins: a nested li
+            // follows its parent, so the innermost bullet gets the handle.
+            let best = null, bestDist = Infinity, hit = null;
+            const units = [];
             for (const top of editor.children) {
                 if (!BLOCK_TAGS.has(top.tagName)) continue;
-                const units = (top.tagName === 'UL' || top.tagName === 'OL') ? [...top.children] : [top];
-                for (const u of units) {
-                    const r = u.getBoundingClientRect();
-                    if (y >= r.top && y <= r.bottom) return u;
-                    const d = y < r.top ? r.top - y : y - r.bottom;
-                    if (d < bestDist) { bestDist = d; best = u; }
-                }
+                if (top.tagName === 'UL' || top.tagName === 'OL') units.push(...top.querySelectorAll('li'));
+                else units.push(top);
             }
-            return bestDist <= 28 ? best : null;
+            for (const u of units) {
+                const r = u.getBoundingClientRect();
+                if (y >= r.top && y <= r.bottom) hit = u;
+                const d = y < r.top ? r.top - y : y - r.bottom;
+                if (d < bestDist) { bestDist = d; best = u; }
+            }
+            return hit || (bestDist <= 28 ? best : null);
         }
 
         // Wraps bare text/inline runs at the editor root into <div> blocks
@@ -1166,14 +1171,19 @@
                 handle.style.display = 'none';     // don't block elementFromPoint
             }
             const under = document.elementFromPoint(e.clientX, e.clientY);
-            // Bullets reorder within their own list; top-level blocks across the note.
+            // Bullets can drop beside any bullet in any list (or among top-level
+            // blocks); other blocks target top-level positions. Never allow a
+            // drop inside the dragged block itself (e.g. its own sub-list).
             let b = null;
             if (dragBlock.tagName === 'LI') {
-                const li = under && (under.nodeType === 1 ? under : under.parentElement)?.closest('li');
-                if (li && li.parentElement === dragBlock.parentElement) b = li;
+                const el = under && (under.nodeType === 1 ? under : under.parentElement);
+                const li = el ? el.closest('li') : null;
+                if (li && li !== dragBlock && !dragBlock.contains(li)) b = li;
+                else b = topBlockOf(under);
             } else {
                 b = topBlockOf(under);
             }
+            if (b && dragBlock.contains(b)) b = null;
             if (!b || b === dragBlock) { dropLine.style.display = 'none'; dropTarget = null; return; }
             const r = b.getBoundingClientRect();
             const before = e.clientY < r.top + r.height / 2;
@@ -1187,8 +1197,19 @@
             if (!armedDrag) return;
             if (dragBlock) {
                 if (dropTarget) {
-                    if (dropTarget.before) { dropTarget.block.before(dragBlock); }
-                    else { dropTarget.block.after(dragBlock); }
+                    const sourceList = dragBlock.tagName === 'LI' ? dragBlock.parentElement : null;
+                    let node = dragBlock;
+                    if (dragBlock.tagName === 'LI' && dropTarget.block.tagName !== 'LI') {
+                        // Dropped among top-level blocks: a bullet stays a bullet,
+                        // wrapped in a fresh list of its original kind.
+                        const wrap = document.createElement(sourceList && sourceList.tagName === 'OL' ? 'ol' : 'ul');
+                        wrap.appendChild(dragBlock);
+                        node = wrap;
+                    }
+                    if (dropTarget.before) { dropTarget.block.before(node); }
+                    else { dropTarget.block.after(node); }
+                    // Dragging the last bullet out leaves an empty list; drop it.
+                    if (sourceList && sourceList !== node && sourceList.children.length === 0) sourceList.remove();
                     afterBlockEdit();
                 }
                 dragBlock.style.opacity = '';
@@ -1272,6 +1293,7 @@
                     const fresh = document.createElement('div');
                     fresh.className = 'todo';
                     fresh.innerHTML = '<input type="checkbox" contenteditable="false"><span> </span>';
+                    fresh.style.marginLeft = todo.style.marginLeft; // keep indent depth
                     todo.after(fresh);
                     placeCaretIn(fresh.querySelector('span'), false);
                 }
@@ -1385,8 +1407,26 @@
             if (e.key === 'Tab') {
                 // Always handle Tab ourselves so it never moves focus / jumps the caret.
                 e.preventDefault();
-                if (ghostEl) { acceptGhost(); }
-                else { document.execCommand('insertText', false, '    '); }
+                if (ghostEl && !e.shiftKey) { acceptGhost(); return; }
+
+                const anchor = window.getSelection().anchorNode;
+                // In lists, Tab nests the bullet one level deeper and Shift+Tab
+                // lifts it back out - Notion-style outlining via native nesting.
+                if (closestIn(anchor, 'li')) {
+                    document.execCommand(e.shiftKey ? 'outdent' : 'indent');
+                    notifyChanged();
+                    return;
+                }
+                // To-dos indent by margin steps (they're divs, not list items).
+                const todo = closestIn(anchor, '.todo');
+                if (todo) {
+                    const cur = parseInt(todo.style.marginLeft, 10) || 0;
+                    const next = Math.max(0, cur + (e.shiftKey ? -28 : 28));
+                    todo.style.marginLeft = next ? next + 'px' : '';
+                    notifyChanged();
+                    return;
+                }
+                if (!e.shiftKey) { document.execCommand('insertText', false, '    '); }
                 return;
             }
             // Any real edit/navigation key dismisses a stale suggestion.
