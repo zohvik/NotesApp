@@ -14,6 +14,7 @@ public class Note : INotifyPropertyChanged
     private string _title = string.Empty;
     private string _tags = string.Empty;
     private bool _isFavorite;
+    private bool _isActiveTab;
 
     public Guid Id { get; set; } = Guid.NewGuid();
 
@@ -58,6 +59,25 @@ public class Note : INotifyPropertyChanged
 
             _tags = value;
             OnPropertyChanged(nameof(Tags));
+        }
+    }
+
+    // Whether this note is the active tab in the editor's tab strip.
+    // Pure UI state - never stored or synced.
+    [NotMapped]
+    [JsonIgnore]
+    public bool IsActiveTab
+    {
+        get => _isActiveTab;
+        set
+        {
+            if (_isActiveTab == value)
+            {
+                return;
+            }
+
+            _isActiveTab = value;
+            OnPropertyChanged(nameof(IsActiveTab));
         }
     }
 

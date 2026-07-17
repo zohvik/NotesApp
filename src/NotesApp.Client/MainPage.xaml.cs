@@ -121,7 +121,8 @@ public partial class MainPage : ContentPage
 				text = t.TextPrimary,
 				muted = t.TextMuted,
 				accent = t.Accent,
-				divider = t.Divider
+				divider = t.Divider,
+				dark = t.IsDark
 			}
 		});
 	}

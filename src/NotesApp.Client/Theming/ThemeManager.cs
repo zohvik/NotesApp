@@ -10,7 +10,8 @@ public static class ThemeManager
         { "Bg", "BgSidebar", "BgList", "Divider", "TextPrimary", "TextMuted", "RowSelected", "Accent" };
 
     public record Theme(string Name, string Bg, string BgSidebar, string BgList,
-        string Divider, string TextPrimary, string TextMuted, string RowSelected, string Accent);
+        string Divider, string TextPrimary, string TextMuted, string RowSelected, string Accent,
+        bool IsDark = true);
 
     public static readonly IReadOnlyList<Theme> Themes = new List<Theme>
     {
@@ -19,7 +20,7 @@ public static class ThemeManager
         new("Catppuccin Mocha", "#1E1E2E", "#11111B", "#181825", "#313244", "#CDD6F4",   "#A6ADC8", "#313244",   "#CBA6F7"),
         new("Catppuccin Macchiato","#24273A","#181926","#1E2030","#363A4F","#CAD3F5",    "#A5ADCB", "#363A4F",   "#C6A0F6"),
         new("Catppuccin Frappe","#303446", "#232634", "#292C3C", "#414559", "#C6D0F5",   "#A5ADCE", "#414559",   "#CA9EE6"),
-        new("Catppuccin Latte", "#EFF1F5", "#DCE0E8", "#E6E9EF", "#CCD0DA", "#4C4F69",   "#6C6F85", "#CCD0DA",   "#8839EF"),
+        new("Catppuccin Latte", "#EFF1F5", "#DCE0E8", "#E6E9EF", "#CCD0DA", "#4C4F69",   "#6C6F85", "#CCD0DA",   "#8839EF", IsDark: false),
     };
 
     public static IReadOnlyList<string> ThemeNames => Themes.Select(t => t.Name).ToList();

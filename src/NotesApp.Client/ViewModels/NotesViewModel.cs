@@ -35,6 +35,9 @@ public partial class NotesViewModel : ObservableObject
     public ObservableCollection<Note> Notes { get; } = new();
     public ObservableCollection<RelatedNote> RelatedNotes { get; } = new();
 
+    // Notes open as tabs above the editor (session-only, like browser tabs).
+    public ObservableCollection<Note> OpenTabs { get; } = new();
+
     [ObservableProperty]
     private bool hasRelated;
 
@@ -199,6 +202,13 @@ public partial class NotesViewModel : ObservableObject
                 selectedNote = note;
 #pragma warning restore MVVMTK0034
                 OnPropertyChanged(nameof(SelectedNote));
+
+                // The setter's partial was bypassed, so open the tab here.
+                if (!OpenTabs.Contains(note))
+                {
+                    OpenTabs.Add(note);
+                }
+                note.IsActiveTab = true;
             }
         }
         else
@@ -327,10 +337,13 @@ public partial class NotesViewModel : ObservableObject
             return string.Empty;
         }
 
+        // Checkboxes become [x]/[ ] so the AI understands to-do state.
+        var text = Regex.Replace(html, "(?i)<input[^>]*type=\"checkbox\"[^>]*checked[^>]*>", "[x] ");
+        text = Regex.Replace(text, "(?i)<input[^>]*type=\"checkbox\"[^>]*>", "[ ] ");
         // Cell boundaries become spaces so table content doesn't glue ("John28"),
         // then block boundaries become newlines, strip remaining tags, decode entities.
-        var text = Regex.Replace(html, "(?i)</t[dh]>", " ");
-        text = Regex.Replace(text, "(?i)<(br|/p|/div|/h[1-6]|/tr|/li)\\s*/?>", "\n");
+        text = Regex.Replace(text, "(?i)</t[dh]>", " ");
+        text = Regex.Replace(text, "(?i)<(br|hr|/p|/div|/h[1-6]|/tr|/li|/pre|/blockquote|/summary|/details)\\s*/?>", "\n");
         text = Regex.Replace(text, "<[^>]+>", string.Empty);
         return WebUtility.HtmlDecode(text).Trim();
     }
@@ -355,6 +368,20 @@ public partial class NotesViewModel : ObservableObject
         // The edit fields still hold the PREVIOUS note's text here - commit any
         // pending auto-save for it before they get overwritten below.
         _ = FlushAutoSaveAsync(oldValue, EditTitle, EditBody, EditTags);
+
+        // Keep the tab strip in sync: opening a note opens its tab.
+        if (oldValue is not null)
+        {
+            oldValue.IsActiveTab = false;
+        }
+        if (newValue is not null)
+        {
+            if (!OpenTabs.Contains(newValue))
+            {
+                OpenTabs.Add(newValue);
+            }
+            newValue.IsActiveTab = true;
+        }
 
         _loadingNote = true;
         EditTitle = newValue?.Title ?? string.Empty;
@@ -546,6 +573,36 @@ public partial class NotesViewModel : ObservableObject
         PushToEditor(string.Empty);
     }
 
+    [RelayCommand]
+    private void SelectTab(Note? note)
+    {
+        if (note is not null)
+        {
+            SelectedNote = note;
+        }
+    }
+
+    [RelayCommand]
+    private void CloseTab(Note? note)
+    {
+        if (note is null)
+        {
+            return;
+        }
+
+        var index = OpenTabs.IndexOf(note);
+        OpenTabs.Remove(note);
+        note.IsActiveTab = false;
+
+        // Closing the active tab activates a neighbor (or clears the editor).
+        if (SelectedNote == note)
+        {
+            SelectedNote = OpenTabs.Count > 0
+                ? OpenTabs[Math.Min(index, OpenTabs.Count - 1)]
+                : null;
+        }
+    }
+
     // Stars/unstars the open note. Saves immediately (no debounce) - a favorite
     // toggle is a deliberate click, not typing.
     [RelayCommand]
@@ -592,6 +649,7 @@ public partial class NotesViewModel : ObservableObject
         }
 
         Notes.Remove(SelectedNote);
+        OpenTabs.Remove(SelectedNote);
         NewNote();
     }
 
