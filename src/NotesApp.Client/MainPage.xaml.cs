@@ -40,11 +40,13 @@ public partial class MainPage : ContentPage
 	{
 		base.OnAppearing();
 
-		// Poll the editor for outbound messages.
+		// Poll the editor for outbound messages. 100ms keeps the initial content
+		// load and ghost-text/autosave round-trips feeling immediate; an empty
+		// drain is cheap, so the extra polls cost little on a desktop app.
 		if (_pollTimer is null)
 		{
 			_pollTimer = Dispatcher.CreateTimer();
-			_pollTimer.Interval = TimeSpan.FromMilliseconds(250);
+			_pollTimer.Interval = TimeSpan.FromMilliseconds(100);
 			_pollTimer.Tick += async (_, _) => await DrainAsync();
 			_pollTimer.Start();
 		}
