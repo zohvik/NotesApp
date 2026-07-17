@@ -52,107 +52,6 @@
         #editor th { background: rgba(128,128,128,0.15); font-weight: 600; }
         .ghost { color: var(--muted); opacity: 0.75; }
 
-<<<<<<< HEAD
-        /* ---- Rich blocks ---- */
-        #editor blockquote {
-            margin: 8px 0; padding: 2px 14px;
-            border-left: 3px solid var(--text);
-        }
-        #editor pre {
-            background: rgba(128,128,128,0.12);
-            border-radius: 6px; padding: 12px 14px; margin: 8px 0;
-            font-family: ui-monospace, "SF Mono", Consolas, monospace;
-            font-size: 13.5px; white-space: pre-wrap;
-        }
-        #editor hr {
-            border: none; border-top: 1px solid var(--divider); margin: 14px 0;
-        }
-        #editor .callout {
-            display: flex; gap: 10px; align-items: flex-start;
-            background: rgba(128,128,128,0.12); border-radius: 8px;
-            padding: 12px 14px; margin: 8px 0;
-        }
-        #editor .callout-icon { user-select: none; }
-        #editor .callout-body { flex: 1; min-width: 0; }
-        #editor .todo {
-            display: flex; gap: 8px; align-items: baseline; margin: 2px 0;
-        }
-        #editor .todo input[type="checkbox"] {
-            width: 15px; height: 15px; accent-color: var(--accent);
-            cursor: pointer; flex-shrink: 0; transform: translateY(2px);
-        }
-        #editor .todo.done span { text-decoration: line-through; color: var(--muted); }
-        #editor details {
-            margin: 4px 0; padding-left: 2px;
-        }
-        #editor summary {
-            cursor: default; list-style: none; font-weight: 600;
-        }
-        #editor summary::-webkit-details-marker { display: none; }
-        #editor summary::before {
-            content: '▸'; display: inline-block; width: 18px; cursor: pointer;
-            color: var(--muted); transition: transform 0.1s ease;
-        }
-        #editor details[open] > summary::before { transform: rotate(90deg); }
-        #editor details > div { padding-left: 18px; }
-
-        /* ---- Column layouts ---- */
-        #editor .cols { display: flex; gap: 20px; margin: 8px 0; }
-        #editor .col { flex: 1; min-width: 0; }
-        #editor .cols .col + .col { border-left: 1px solid var(--divider); padding-left: 20px; }
-
-        /* ---- Drag-to-reorder ---- */
-        #draghandle {
-            position: fixed; z-index: 25; display: none;
-            width: 20px; height: 22px; line-height: 22px; text-align: center;
-            color: var(--muted); font-size: 13px; cursor: grab; user-select: none;
-            border-radius: 4px;
-        }
-        #draghandle:hover { background: var(--divider); color: var(--text); }
-        #dropline {
-            position: fixed; z-index: 24; display: none; height: 2px;
-            background: var(--accent); border-radius: 1px; pointer-events: none;
-        }
-
-        /* ---- Popup menus (slash menu + block menu share the same look) ---- */
-        #slashmenu, #blockmenu {
-            position: fixed; z-index: 30; display: none;
-            min-width: 210px; max-height: 320px; overflow-y: auto;
-            background: var(--bg); border: 1px solid var(--divider);
-            border-radius: 10px; padding: 6px;
-            box-shadow: 0 8px 28px rgba(0,0,0,0.45);
-        }
-        #slashmenu button, #blockmenu button {
-            display: block; width: 100%; text-align: left;
-            background: transparent; border: none; color: var(--text);
-            padding: 7px 10px; font-size: 13.5px; border-radius: 6px; cursor: pointer;
-        }
-        #slashmenu button.sel, #blockmenu button:hover { background: var(--divider); }
-        #slashmenu .hint, #blockmenu .hint { color: var(--muted); font-size: 11px; padding: 4px 10px; }
-        #blockmenu .danger { color: #D44C47; }
-
-        /* ---- Floating selection toolbar ---- */
-        #selbar {
-            position: fixed; z-index: 30; display: none;
-            background: var(--bg); border: 1px solid var(--divider);
-            border-radius: 10px; padding: 5px;
-            box-shadow: 0 8px 28px rgba(0,0,0,0.45);
-            white-space: nowrap;
-        }
-        #selbar button {
-            background: transparent; border: none; color: var(--text);
-            padding: 5px 9px; font-size: 14px; border-radius: 6px; cursor: pointer;
-        }
-        #selbar button:hover { background: var(--divider); }
-        #selpalette { display: none; padding: 8px 6px 4px; }
-        #selpalette .row { display: flex; gap: 5px; align-items: center; margin-bottom: 6px; }
-        #selpalette .lbl { color: var(--muted); font-size: 10.5px; width: 52px; }
-        #selpalette .sw {
-            width: 20px; height: 20px; border-radius: 5px; cursor: pointer;
-            border: 1px solid var(--divider); padding: 0; font-size: 11px;
-            display: inline-flex; align-items: center; justify-content: center;
-        }
-=======
         /* ---- Notion-style block handle + context menu ---- */
         /* ⋮⋮ grip that appears in the left gutter of the hovered block. */
         #handle {
@@ -197,7 +96,94 @@
         /* Block being rewritten by AI pulses until the result lands. */
         .ai-busy { animation: aibusy 1.1s ease-in-out infinite; }
         @keyframes aibusy { 50% { opacity: 0.4; } }
->>>>>>> origin/main
+
+        /* ---- Rich blocks ---- */
+        #editor blockquote {
+            margin: 8px 0; padding: 2px 14px;
+            border-left: 3px solid var(--text);
+        }
+        #editor pre {
+            background: rgba(128,128,128,0.12);
+            border-radius: 6px; padding: 12px 14px; margin: 8px 0;
+            font-family: ui-monospace, "SF Mono", Consolas, monospace;
+            font-size: 13.5px; white-space: pre-wrap;
+        }
+        #editor hr {
+            border: none; border-top: 1px solid var(--divider); margin: 14px 0;
+        }
+        #editor .callout {
+            display: flex; gap: 10px; align-items: flex-start;
+            background: rgba(128,128,128,0.12); border-radius: 8px;
+            padding: 12px 14px; margin: 8px 0;
+        }
+        #editor .callout-icon { user-select: none; }
+        #editor .callout-body { flex: 1; min-width: 0; }
+        #editor .todo {
+            display: flex; gap: 8px; align-items: baseline; margin: 2px 0;
+        }
+        #editor .todo input[type="checkbox"] {
+            width: 15px; height: 15px; accent-color: var(--accent);
+            cursor: pointer; flex-shrink: 0; transform: translateY(2px);
+        }
+        #editor .todo.done span { text-decoration: line-through; color: var(--muted); }
+        #editor details { margin: 4px 0; padding-left: 2px; }
+        #editor summary { cursor: default; list-style: none; font-weight: 600; }
+        #editor summary::-webkit-details-marker { display: none; }
+        #editor summary::before {
+            content: '▸'; display: inline-block; width: 18px; cursor: pointer;
+            color: var(--muted); transition: transform 0.1s ease;
+        }
+        #editor details[open] > summary::before { transform: rotate(90deg); }
+        #editor details > div { padding-left: 18px; }
+
+        /* ---- Column layouts ---- */
+        #editor .cols { display: flex; gap: 20px; margin: 8px 0; }
+        #editor .col { flex: 1; min-width: 0; }
+        #editor .cols .col + .col { border-left: 1px solid var(--divider); padding-left: 20px; }
+
+        /* ---- Drag-to-reorder drop indicator ---- */
+        #dropline {
+            position: fixed; z-index: 8; display: none; height: 2px;
+            background: var(--accent); border-radius: 1px; pointer-events: none;
+        }
+
+        /* ---- Slash-command menu ---- */
+        #slashmenu {
+            position: fixed; z-index: 30; display: none;
+            min-width: 210px; max-height: 320px; overflow-y: auto;
+            background: var(--bg); border: 1px solid var(--divider);
+            border-radius: 10px; padding: 6px;
+            box-shadow: 0 8px 28px rgba(0,0,0,0.45);
+        }
+        #slashmenu button {
+            display: block; width: 100%; text-align: left;
+            background: transparent; border: none; color: var(--text);
+            padding: 7px 10px; font-size: 13.5px; border-radius: 6px; cursor: pointer;
+        }
+        #slashmenu button.sel { background: var(--divider); }
+        #slashmenu .hint { color: var(--muted); font-size: 11px; padding: 4px 10px; }
+
+        /* ---- Floating selection toolbar ---- */
+        #selbar {
+            position: fixed; z-index: 30; display: none;
+            background: var(--bg); border: 1px solid var(--divider);
+            border-radius: 10px; padding: 5px;
+            box-shadow: 0 8px 28px rgba(0,0,0,0.45);
+            white-space: nowrap;
+        }
+        #selbar button {
+            background: transparent; border: none; color: var(--text);
+            padding: 5px 9px; font-size: 14px; border-radius: 6px; cursor: pointer;
+        }
+        #selbar button:hover { background: var(--divider); }
+        #selpalette { display: none; padding: 8px 6px 4px; }
+        #selpalette .row { display: flex; gap: 5px; align-items: center; margin-bottom: 6px; }
+        #selpalette .lbl { color: var(--muted); font-size: 10.5px; width: 52px; }
+        #selpalette .sw {
+            width: 20px; height: 20px; border-radius: 5px; cursor: pointer;
+            border: 1px solid var(--divider); padding: 0; font-size: 11px;
+            display: inline-flex; align-items: center; justify-content: center;
+        }
     </style>
 </head>
 <body>
@@ -212,15 +198,15 @@
     </div>
     <div id="editor" contenteditable="true" data-placeholder="Type '/' for blocks, select text to format, Tab accepts AI suggestions..."></div>
 
-    <!-- Slash-command menu (shown when '/' is typed) -->
-    <div id="slashmenu"></div>
-
-    <!-- Block grip: drag to move the block, click for the block menu -->
-    <div id="draghandle" title="Drag to move, click for options">⠿</div>
+    <!-- Block handle (⋮⋮) and the Notion-style block context menu. They live
+         outside the contenteditable so interacting with them never edits text.
+         Press-and-drag the handle to move the block; a plain click opens the menu. -->
+    <div id="handle" title="Drag to move, click for actions">⋮⋮</div>
+    <div id="blockmenu"></div>
     <div id="dropline"></div>
 
-    <!-- Block menu (opened by clicking a block's ⠿ grip) -->
-    <div id="blockmenu"></div>
+    <!-- Slash-command menu (shown when '/' is typed) -->
+    <div id="slashmenu"></div>
 
     <!-- Floating toolbar (shown over selected text) -->
     <div id="selbar">
@@ -230,11 +216,6 @@
             <div class="row"><span class="lbl">Highlight</span></div>
         </div>
     </div>
-
-    <!-- Block handle (⋮⋮) and the Notion-style block context menu. They live
-         outside the contenteditable so interacting with them never edits text. -->
-    <div id="handle" title="Block actions">⋮⋮</div>
-    <div id="blockmenu"></div>
 
     <script>
         const editor = document.getElementById('editor');
@@ -333,15 +314,11 @@
             clearTimeout(idleTimer);
             window.__outbox = window.__outbox.filter(m => m.type !== 'changed');
             removeGhost();
-<<<<<<< HEAD
-            closeSlash();
-            closeBlockMenu();
-=======
-            // A different (or reloaded) note invalidates the block menu and any
-            // in-flight block AI request targeting the old DOM.
+            // A different (or reloaded) note invalidates the block menu, the
+            // slash menu, and any in-flight block AI request on the old DOM.
             closeMenu();
+            closeSlash();
             for (const k of Object.keys(pendingAiBlocks)) finishBlockAi(k);
->>>>>>> origin/main
             if (keepHistory) {
                 // Same note, new content (an AI edit): commit the pre-edit state
                 // first so a single undo restores it.
@@ -484,8 +461,39 @@
         // ---- Toolbar actions ----
         function fmt(cmd) { editor.focus(); document.execCommand(cmd, false, null); notifyChanged(); }
         function block(tag) { editor.focus(); document.execCommand('formatBlock', false, tag); notifyChanged(); }
+        function insertTable() {
+            editor.focus();
+            const html = '<table><tr><th>Column 1</th><th>Column 2</th></tr>' +
+                         '<tr><td>&nbsp;</td><td>&nbsp;</td></tr></table><p>&nbsp;</p>';
+            document.execCommand('insertHTML', false, html);
+            notifyChanged();
+        }
+        function currentTable() {
+            let n = window.getSelection().anchorNode;
+            while (n && n !== editor) {
+                if (n.tagName === 'TABLE') return n;
+                n = n.parentNode;
+            }
+            const tables = editor.querySelectorAll('table');
+            return tables.length ? tables[tables.length - 1] : null;
+        }
+        function addRow() {
+            const t = currentTable(); if (!t) return;
+            const cols = t.rows[0] ? t.rows[0].cells.length : 2;
+            const row = t.insertRow(-1);
+            for (let i = 0; i < cols; i++) { row.insertCell(-1).innerHTML = '&nbsp;'; }
+            notifyChanged();
+        }
+        function addCol() {
+            const t = currentTable(); if (!t) return;
+            for (let i = 0; i < t.rows.length; i++) {
+                const cell = t.rows[i].insertCell(-1);
+                cell.innerHTML = i === 0 ? '<b>&nbsp;</b>' : '&nbsp;';
+            }
+            notifyChanged();
+        }
 
-        // ---- Block insertion (used by the slash menu) ----
+        // ---- Rich block insertion (used by the slash menu) ----
         function insertBlockHtml(html) {
             editor.focus();
             document.execCommand('insertHTML', false, html);
@@ -503,6 +511,13 @@
         function insertDivider() {
             insertBlockHtml('<hr contenteditable="false"><p>&nbsp;</p>');
         }
+        function insertColumns(count) {
+            let cols = '';
+            for (let i = 0; i < count; i++) {
+                cols += '<div class="col"><p>&nbsp;</p></div>';
+            }
+            insertBlockHtml('<div class="cols">' + cols + '</div><p>&nbsp;</p>');
+        }
 
         // ---- Slash-command menu ----
         const slashMenu = document.getElementById('slashmenu');
@@ -512,7 +527,7 @@
         let slashFiltered = [];
 
         const slashItems = [
-            { t: 'Text',          k: 'text paragraph plain', run: () => block('p') },
+            { t: 'Text',          k: 'text paragraph plain', run: () => block('P') },
             { t: 'Heading 1',     k: 'h1 heading big',       run: () => block('H1') },
             { t: 'Heading 2',     k: 'h2 heading',           run: () => block('H2') },
             { t: 'Heading 3',     k: 'h3 heading small',     run: () => block('H3') },
@@ -528,14 +543,6 @@
             { t: '2 columns',     k: 'columns two layout',   run: () => insertColumns(2) },
             { t: '3 columns',     k: 'columns three layout', run: () => insertColumns(3) },
         ];
-
-        function insertColumns(count) {
-            let cols = '';
-            for (let i = 0; i < count; i++) {
-                cols += '<div class="col"><p>&nbsp;</p></div>';
-            }
-            insertBlockHtml('<div class="cols">' + cols + '</div><p>&nbsp;</p>');
-        }
 
         function openSlash() {
             const sel = window.getSelection();
@@ -621,17 +628,17 @@
 
         // Text colors work on both light and dark backgrounds; highlight
         // backgrounds swap with the theme (deep tints on dark, pastels on light).
-        const textColors = ['default', '#9B9B9B', '#BA856F', '#D9730D', '#CB912F', '#448361', '#337EA9', '#9065B0', '#C14C8A', '#D44C47'];
-        const highlightsDark = ['default', '#454B4E', '#59563B', '#594A3A', '#354C4B', '#364954', '#443F57', '#533B4C', '#594141'];
-        const highlightsLight = ['default', '#E9E9E7', '#FBF3DB', '#FAEBDD', '#EDF3EC', '#E7F3F8', '#F6F3F9', '#FAF1F5', '#FDEBEC'];
+        const selTextColors = ['default', '#9B9B9B', '#BA856F', '#D9730D', '#CB912F', '#448361', '#337EA9', '#9065B0', '#C14C8A', '#D44C47'];
+        const selHighlightsDark = ['default', '#454B4E', '#59563B', '#594A3A', '#354C4B', '#364954', '#443F57', '#533B4C', '#594141'];
+        const selHighlightsLight = ['default', '#E9E9E7', '#FBF3DB', '#FAEBDD', '#EDF3EC', '#E7F3F8', '#F6F3F9', '#FAF1F5', '#FDEBEC'];
         let themeIsDark = true;
 
         function buildPalette() {
             const rows = selPalette.querySelectorAll('.row');
             rows[0].querySelectorAll('.sw').forEach(s => s.remove());
             rows[1].querySelectorAll('.sw').forEach(s => s.remove());
-            textColors.forEach(c => rows[0].appendChild(makeSwatch(c, false)));
-            (themeIsDark ? highlightsDark : highlightsLight).forEach(c => rows[1].appendChild(makeSwatch(c, true)));
+            selTextColors.forEach(c => rows[0].appendChild(makeSwatch(c, false)));
+            (themeIsDark ? selHighlightsDark : selHighlightsLight).forEach(c => rows[1].appendChild(makeSwatch(c, true)));
         }
         function makeSwatch(c, isBg) {
             const b = document.createElement('button');
@@ -639,10 +646,10 @@
             if (c === 'default') { b.textContent = '✕'; b.style.color = 'var(--muted)'; }
             else if (isBg) { b.style.background = c; }
             else { b.style.color = c; b.textContent = 'A'; }
-            b.addEventListener('mousedown', (e) => { e.preventDefault(); applyColor(c, isBg); });
+            b.addEventListener('mousedown', (e) => { e.preventDefault(); applySelColor(c, isBg); });
             return b;
         }
-        function applyColor(c, isBg) {
+        function applySelColor(c, isBg) {
             document.execCommand('styleWithCSS', false, true);
             if (c === 'default') {
                 if (isBg) { document.execCommand('hiliteColor', false, 'transparent'); }
@@ -678,344 +685,6 @@
         });
         buildPalette();
 
-        // ---- Drag-to-reorder top-level blocks ----
-        const dragHandle = document.getElementById('draghandle');
-        const dropLine = document.getElementById('dropline');
-        let hoverBlock = null;   // block the grip is currently shown for
-        let dragBlock = null;    // block being dragged
-        let dropTarget = null;   // {block, before}
-
-        // The draggable unit is a direct child of #editor.
-        function topBlockOf(node) {
-            let el = node && (node.nodeType === 1 ? node : node.parentElement);
-            while (el && el.parentElement !== editor) el = el.parentElement;
-            return (el && el !== editor) ? el : null;
-        }
-
-        editor.addEventListener('mousemove', (e) => {
-            if (dragBlock) return;
-            const b = topBlockOf(e.target);
-            if (!b) { return; }
-            hoverBlock = b;
-            const r = b.getBoundingClientRect();
-            // Kept within the editor's own padding so mousing onto the grip
-            // doesn't count as leaving the editor (which would hide it).
-            dragHandle.style.left = (r.left - 22) + 'px';
-            dragHandle.style.top = (r.top + 2) + 'px';
-            dragHandle.style.display = 'block';
-        });
-        editor.addEventListener('mouseleave', (e) => {
-            // Don't hide when the pointer is moving onto the grip itself.
-            if (!dragBlock && !armedDrag && e.relatedTarget !== dragHandle) {
-                dragHandle.style.display = 'none';
-            }
-        });
-        window.addEventListener('scroll', () => { dragHandle.style.display = 'none'; }, true);
-
-        // HTML5 drag-and-drop never fires inside WKWebView, so dragging is
-        // implemented with plain mouse events: mousedown on the grip arms a
-        // drag, movement past a small threshold starts it, mouseup either
-        // drops the block or - if the mouse never moved - opens the block menu.
-        let armedDrag = null; // {x, y, block} set on grip mousedown
-
-        dragHandle.addEventListener('mousedown', (e) => {
-            e.preventDefault(); // keep the editor's caret/selection intact
-            if (hoverBlock) {
-                armedDrag = { x: e.clientX, y: e.clientY, block: hoverBlock };
-            }
-        });
-        document.addEventListener('mousemove', (e) => {
-            if (!armedDrag) return;
-            if (!dragBlock) {
-                if (Math.abs(e.clientX - armedDrag.x) + Math.abs(e.clientY - armedDrag.y) < 5) return;
-                dragBlock = armedDrag.block;      // threshold crossed: start dragging
-                dragBlock.style.opacity = '0.4';
-                dragHandle.style.display = 'none'; // don't block elementFromPoint
-            }
-            const under = document.elementFromPoint(e.clientX, e.clientY);
-            const b = topBlockOf(under);
-            if (!b || b === dragBlock) { dropLine.style.display = 'none'; dropTarget = null; return; }
-            const r = b.getBoundingClientRect();
-            const before = e.clientY < r.top + r.height / 2;
-            dropTarget = { block: b, before };
-            dropLine.style.left = r.left + 'px';
-            dropLine.style.width = r.width + 'px';
-            dropLine.style.top = (before ? r.top - 2 : r.bottom) + 'px';
-            dropLine.style.display = 'block';
-        });
-        document.addEventListener('mouseup', () => {
-            if (!armedDrag) return;
-            if (dragBlock) {
-                if (dropTarget) {
-                    if (dropTarget.before) { dropTarget.block.before(dragBlock); }
-                    else { dropTarget.block.after(dragBlock); }
-                    notifyChanged();
-                    pushHistory();
-                }
-                dragBlock.style.opacity = '';
-            } else {
-                openBlockMenu(armedDrag.block); // plain click on the grip
-            }
-            armedDrag = null;
-            endDrag();
-        });
-        function endDrag() {
-            dragBlock = null;
-            dropTarget = null;
-            dropLine.style.display = 'none';
-        }
-
-        // ---- Block menu (click the grip): turn into / duplicate / delete ----
-        const blockMenu = document.getElementById('blockmenu');
-
-        const blockMenuItems = [
-            { t: 'Text',          kind: 'p' },
-            { t: 'Heading 1',     kind: 'h1' },
-            { t: 'Heading 2',     kind: 'h2' },
-            { t: 'Heading 3',     kind: 'h3' },
-            { t: 'Bulleted list', kind: 'ul' },
-            { t: 'Numbered list', kind: 'ol' },
-            { t: 'To-do list',    kind: 'todo' },
-            { t: 'Toggle list',   kind: 'toggle' },
-            { t: 'Quote',         kind: 'blockquote' },
-            { t: 'Code',          kind: 'pre' },
-            { t: 'Callout',       kind: 'callout' },
-        ];
-
-        function openBlockMenu(block) {
-            blockMenu.innerHTML = '<div class="hint">Turn into</div>';
-            blockMenuItems.forEach(item => {
-                const b = document.createElement('button');
-                b.textContent = item.t;
-                b.addEventListener('mousedown', (e) => {
-                    e.preventDefault();
-                    closeBlockMenu();
-                    turnBlockInto(block, item.kind);
-                });
-                blockMenu.appendChild(b);
-            });
-
-            const hint = document.createElement('div');
-            hint.className = 'hint';
-            hint.textContent = 'Actions';
-            blockMenu.appendChild(hint);
-
-            const dup = document.createElement('button');
-            dup.textContent = 'Duplicate';
-            dup.addEventListener('mousedown', (e) => {
-                e.preventDefault();
-                closeBlockMenu();
-                block.after(block.cloneNode(true));
-                notifyChanged();
-                pushHistory();
-            });
-            blockMenu.appendChild(dup);
-
-            const del = document.createElement('button');
-            del.textContent = 'Delete';
-            del.className = 'danger';
-            del.addEventListener('mousedown', (e) => {
-                e.preventDefault();
-                closeBlockMenu();
-                block.remove();
-                if (!editor.firstElementChild) { editor.innerHTML = '<p><br></p>'; }
-                notifyChanged();
-                pushHistory();
-            });
-            blockMenu.appendChild(del);
-
-            const r = block.getBoundingClientRect();
-            blockMenu.style.left = Math.max(8, r.left - 26) + 'px';
-            blockMenu.style.top = Math.min(r.bottom + 4, window.innerHeight - 330) + 'px';
-            blockMenu.style.display = 'block';
-        }
-        function closeBlockMenu() { blockMenu.style.display = 'none'; }
-
-        // Converts an existing block to another kind, preserving its content.
-        function turnBlockInto(block, kind) {
-            editor.focus();
-            if (kind === 'todo') {
-                replaceBlockWithHtml(block,
-                    '<div class="todo"><input type="checkbox" contenteditable="false"><span>' +
-                    blockInner(block) + '</span></div>');
-            } else if (kind === 'toggle') {
-                replaceBlockWithHtml(block,
-                    '<details open><summary>' + blockInner(block) + '</summary><div><br></div></details>');
-            } else if (kind === 'callout') {
-                replaceBlockWithHtml(block,
-                    '<div class="callout"><span class="callout-icon" contenteditable="false">💡</span>' +
-                    '<div class="callout-body"><div>' + blockInner(block) + '</div></div></div>');
-            } else if (kind === 'ul' || kind === 'ol') {
-                selectBlockContents(block);
-                document.execCommand(kind === 'ul' ? 'insertUnorderedList' : 'insertOrderedList', false, null);
-            } else {
-                selectBlockContents(block);
-                document.execCommand('formatBlock', false, kind.toUpperCase());
-            }
-            notifyChanged();
-            pushHistory();
-        }
-        // A block's content without any grip/ghost artifacts; falls back to a
-        // space so converted blocks are never empty and unclickable.
-        function blockInner(block) {
-            const clone = block.cloneNode(true);
-            clone.querySelectorAll('.ghost, input[type="checkbox"], .callout-icon').forEach(n => n.remove());
-            const html = clone.innerHTML.trim();
-            return html || '&nbsp;';
-        }
-        function replaceBlockWithHtml(block, html) {
-            const tmp = document.createElement('div');
-            tmp.innerHTML = html;
-            const first = tmp.firstElementChild;
-            block.replaceWith(...tmp.childNodes);
-            if (first) {
-                placeCaretIn(first.querySelector('span, .callout-body div, summary') || first, true);
-            }
-        }
-        function selectBlockContents(block) {
-            const r = document.createRange();
-            r.selectNodeContents(block);
-            const s = window.getSelection();
-            s.removeAllRanges();
-            s.addRange(r);
-        }
-
-        // ---- Enter-key behavior inside rich blocks ----
-        // WebKit's default Enter clones whole blocks (duplicating checkboxes and
-        // callout icons), so the common cases are handled explicitly here.
-        function closestIn(node, selector) {
-            const el = node && (node.nodeType === 1 ? node : node.parentElement);
-            const hit = el ? el.closest(selector) : null;
-            return hit && editor.contains(hit) ? hit : null;
-        }
-        function placeCaretIn(el, atEnd) {
-            const r = document.createRange();
-            r.selectNodeContents(el);
-            r.collapse(!atEnd);
-            const s = window.getSelection();
-            s.removeAllRanges();
-            s.addRange(r);
-        }
-        function isBlankText(t) { return !(t || '').replace(/ /g, ' ').trim(); }
-
-        function handleEnterInBlocks(e) {
-            const sel = window.getSelection();
-            if (!sel.rangeCount || !sel.isCollapsed) return false;
-            const n = sel.anchorNode;
-
-            const todo = closestIn(n, '.todo');
-            if (todo) {
-                e.preventDefault();
-                const span = todo.querySelector('span');
-                if (span && isBlankText(span.textContent)) {
-                    // Enter on an empty to-do exits the list into a paragraph.
-                    const p = document.createElement('p');
-                    p.innerHTML = '<br>';
-                    todo.replaceWith(p);
-                    placeCaretIn(p, false);
-                } else {
-                    // Continue the list with a fresh unchecked item.
-                    const fresh = document.createElement('div');
-                    fresh.className = 'todo';
-                    fresh.innerHTML = '<input type="checkbox" contenteditable="false"><span> </span>';
-                    todo.after(fresh);
-                    placeCaretIn(fresh.querySelector('span'), false);
-                }
-                notifyChanged();
-                return true;
-            }
-
-            const summary = closestIn(n, 'summary');
-            if (summary) {
-                // Enter on the toggle header moves into (and opens) its body.
-                e.preventDefault();
-                const details = summary.parentElement;
-                let body = details.querySelector(':scope > div');
-                if (!body) {
-                    body = document.createElement('div');
-                    body.innerHTML = '<br>';
-                    details.appendChild(body);
-                }
-                details.setAttribute('open', '');
-                placeCaretIn(body, false);
-                notifyChanged();
-                return true;
-            }
-
-            const calloutBody = closestIn(n, '.callout-body');
-            if (calloutBody) {
-                // Enter on an empty last line exits below the callout;
-                // otherwise the default split stays inside the body, which is fine.
-                const line = closestIn(n, '.callout-body > div');
-                if (line && line === calloutBody.lastElementChild && isBlankText(line.textContent)) {
-                    e.preventDefault();
-                    const p = document.createElement('p');
-                    p.innerHTML = '<br>';
-                    calloutBody.closest('.callout').after(p);
-                    line.remove();
-                    placeCaretIn(p, false);
-                    notifyChanged();
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        // ---- Interactive blocks (checkboxes, toggles) ----
-        editor.addEventListener('click', (e) => {
-            const box = e.target.closest('input[type="checkbox"]');
-            if (box) {
-                // Mirror the live state into the attribute so it survives
-                // innerHTML serialization (save/sync/undo).
-                if (box.checked) { box.setAttribute('checked', ''); } else { box.removeAttribute('checked'); }
-                const todo = box.closest('.todo');
-                if (todo) { todo.classList.toggle('done', box.checked); }
-                notifyChanged();
-                return;
-            }
-            const summary = e.target.closest('summary');
-            if (summary && e.offsetX < 20) {
-                // Click on the ▸ marker toggles; clicks on the text edit it.
-                const details = summary.parentElement;
-                if (details.hasAttribute('open')) { details.removeAttribute('open'); }
-                else { details.setAttribute('open', ''); }
-                e.preventDefault();
-                notifyChanged();
-            }
-        });
-        function insertTable() {
-            editor.focus();
-            const html = '<table><tr><th>Column 1</th><th>Column 2</th></tr>' +
-                         '<tr><td>&nbsp;</td><td>&nbsp;</td></tr></table><p>&nbsp;</p>';
-            document.execCommand('insertHTML', false, html);
-            notifyChanged();
-        }
-        function currentTable() {
-            let n = window.getSelection().anchorNode;
-            while (n && n !== editor) {
-                if (n.tagName === 'TABLE') return n;
-                n = n.parentNode;
-            }
-            const tables = editor.querySelectorAll('table');
-            return tables.length ? tables[tables.length - 1] : null;
-        }
-        function addRow() {
-            const t = currentTable(); if (!t) return;
-            const cols = t.rows[0] ? t.rows[0].cells.length : 2;
-            const row = t.insertRow(-1);
-            for (let i = 0; i < cols; i++) { row.insertCell(-1).innerHTML = '&nbsp;'; }
-            notifyChanged();
-        }
-        function addCol() {
-            const t = currentTable(); if (!t) return;
-            for (let i = 0; i < t.rows.length; i++) {
-                const cell = t.rows[i].insertCell(-1);
-                cell.innerHTML = i === 0 ? '<b>&nbsp;</b>' : '&nbsp;';
-            }
-            notifyChanged();
-        }
-
         // ---- Notion-style block menu ----------------------------------------
         // A "block" is a direct child of #editor, except inside lists where each
         // <li> is its own block (like Notion bullets). The ⋮⋮ handle appears in
@@ -1036,7 +705,7 @@
         // blocks — treating them as blocks made Delete/Duplicate act on a <br>
         // and merge unrelated lines. They become blocks via normalizeEditorBlocks.
         const BLOCK_TAGS = new Set(['DIV', 'P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6',
-                                    'UL', 'OL', 'LI', 'TABLE', 'BLOCKQUOTE', 'PRE']);
+                                    'UL', 'OL', 'LI', 'TABLE', 'BLOCKQUOTE', 'PRE', 'DETAILS']);
 
         // The block containing a DOM node (innermost li wins), or null.
         function blockOf(node) {
@@ -1114,22 +783,73 @@
         function setSelectionToBlock(b) { selectContents(b, false); }
         function placeCaretAtEndOf(el) { selectContents(el, true); }
 
+        // A block's content without UI artifacts (ghosts, checkboxes, callout
+        // icons), for conversions that rebuild the block around its text.
+        function blockInner(b) {
+            const clone = b.cloneNode(true);
+            clone.querySelectorAll('.ghost, input[type="checkbox"], .callout-icon').forEach(n => n.remove());
+            const html = (clone.tagName === 'DETAILS')
+                ? [...clone.children].map(c => c.innerHTML).join(' ')
+                : clone.innerHTML;
+            return (html || '').trim() || '&nbsp;';
+        }
+
+        // Converts a block into one of the rich kinds (to-do/toggle/callout),
+        // preserving its content. List items are lifted out beside their list.
+        function convertSpecial(b, kind) {
+            const inner = blockInner(b);
+            const html = kind === 'TODO'
+                ? '<div class="todo"><input type="checkbox" contenteditable="false"><span>' + inner + '</span></div>'
+                : kind === 'TOGGLE'
+                ? '<details open><summary>' + inner + '</summary><div><br></div></details>'
+                : '<div class="callout"><span class="callout-icon" contenteditable="false">💡</span><div class="callout-body"><div>' + inner + '</div></div></div>';
+            const t = document.createElement('template');
+            t.innerHTML = html;
+            const el = t.content.firstElementChild;
+            if (b.tagName === 'LI') {
+                const list = b.parentElement;
+                list.after(el);
+                b.remove();
+                if (list && !list.children.length) list.remove();
+            } else {
+                b.replaceWith(el);
+            }
+            placeCaretAtEndOf(el.querySelector('span, .callout-body div, summary') || el);
+        }
+
         function turnInto(b, kind) {
             if (b.tagName === 'TABLE') return;
             removeGhost();
+
+            if (kind === 'TODO' || kind === 'TOGGLE' || kind === 'CALLOUT') {
+                convertSpecial(b, kind);
+                afterBlockEdit();
+                return;
+            }
+
+            // Rich source blocks (todo/callout/toggle) are first simplified to a
+            // plain div so formatBlock/list commands don't wrap their chrome.
+            if ((b.matches && b.matches('.todo, .callout')) || b.tagName === 'DETAILS') {
+                const div = document.createElement('div');
+                div.innerHTML = blockInner(b);
+                b.replaceWith(div);
+                b = div;
+            }
+
             setSelectionToBlock(b);
             // A list item is lifted out with the command matching its OWN list
             // type — running insertUnorderedList on an <ol> item would convert
             // the list instead of unlisting the item.
             const liftCmd = b.tagName === 'LI' && b.parentElement && b.parentElement.tagName === 'OL'
                 ? 'insertOrderedList' : 'insertUnorderedList';
-            if (kind === 'UL') {
+            if (kind === 'UL' || kind === 'OL') {
+                const wantCmd = kind === 'UL' ? 'insertUnorderedList' : 'insertOrderedList';
                 if (b.tagName === 'LI') {
-                    if (liftCmd === 'insertUnorderedList') return; // already a bullet
-                    document.execCommand(liftCmd);                 // out of the numbered list...
-                    document.execCommand('insertUnorderedList');   // ...and into a bulleted one
+                    if (liftCmd === wantCmd) return; // already that list type
+                    document.execCommand(liftCmd);   // out of its current list...
+                    document.execCommand(wantCmd);   // ...and into the other kind
                 } else {
-                    document.execCommand('insertUnorderedList');
+                    document.execCommand(wantCmd);
                 }
             } else {
                 if (b.tagName === 'LI') document.execCommand(liftCmd);
@@ -1254,7 +974,11 @@
         ];
         const TURN_INTO = [
             { label: 'Text', kind: 'P' }, { label: 'Heading 1', kind: 'H1' },
-            { label: 'Heading 2', kind: 'H2' }, { label: 'Bulleted list', kind: 'UL' }];
+            { label: 'Heading 2', kind: 'H2' }, { label: 'Heading 3', kind: 'H3' },
+            { label: 'Bulleted list', kind: 'UL' }, { label: 'Numbered list', kind: 'OL' },
+            { label: 'To-do list', kind: 'TODO' }, { label: 'Toggle list', kind: 'TOGGLE' },
+            { label: 'Quote', kind: 'BLOCKQUOTE' }, { label: 'Code', kind: 'PRE' },
+            { label: 'Callout', kind: 'CALLOUT' }];
 
         // One builder for a 'Turn into <kind>' row, shared by the submenu page
         // and the search results so the two can never drift apart.
@@ -1398,7 +1122,7 @@
             });
         });
         function updateHandle(x, y) {
-            if (menuOpen()) return;
+            if (menuOpen() || dragBlock) return;
             const er = editor.getBoundingClientRect();
             if (y < er.top || y > er.bottom || x < er.left - 44 || x > er.right) {
                 handle.style.display = 'none'; hoverBlock = null;
@@ -1412,10 +1136,71 @@
             handle.style.left = Math.max(2, r.left - 26) + 'px';
             handle.style.top = (r.top + 1) + 'px';
         }
+        // Press-and-move on the handle drags the block (HTML5 drag-and-drop never
+        // fires inside these WebViews, so this is plain mouse tracking); a press
+        // released without movement opens the block menu.
+        const dropLine = document.getElementById('dropline');
+        let armedDrag = null;    // {x, y, block} set on handle mousedown
+        let dragBlock = null;    // block being dragged (threshold crossed)
+        let dropTarget = null;   // {block, before}
+
+        // The top-level draggable unit (direct child of #editor).
+        function topBlockOf(node) {
+            let el = node && (node.nodeType === 1 ? node : node.parentElement);
+            while (el && el.parentElement !== editor) el = el.parentElement;
+            return (el && el !== editor && BLOCK_TAGS.has(el.tagName)) ? el : null;
+        }
+
         handle.addEventListener('mousedown', (e) => {
-            e.preventDefault();
-            const r = handle.getBoundingClientRect();
-            openMenu(r.left, r.bottom + 4, hoverBlock);
+            e.preventDefault(); // keep the editor's caret/selection intact
+            if (hoverBlock) {
+                armedDrag = { x: e.clientX, y: e.clientY, block: hoverBlock };
+            }
+        });
+        document.addEventListener('mousemove', (e) => {
+            if (!armedDrag) return;
+            if (!dragBlock) {
+                if (Math.abs(e.clientX - armedDrag.x) + Math.abs(e.clientY - armedDrag.y) < 5) return;
+                dragBlock = armedDrag.block;       // threshold crossed: start dragging
+                dragBlock.style.opacity = '0.4';
+                handle.style.display = 'none';     // don't block elementFromPoint
+            }
+            const under = document.elementFromPoint(e.clientX, e.clientY);
+            // Bullets reorder within their own list; top-level blocks across the note.
+            let b = null;
+            if (dragBlock.tagName === 'LI') {
+                const li = under && (under.nodeType === 1 ? under : under.parentElement)?.closest('li');
+                if (li && li.parentElement === dragBlock.parentElement) b = li;
+            } else {
+                b = topBlockOf(under);
+            }
+            if (!b || b === dragBlock) { dropLine.style.display = 'none'; dropTarget = null; return; }
+            const r = b.getBoundingClientRect();
+            const before = e.clientY < r.top + r.height / 2;
+            dropTarget = { block: b, before };
+            dropLine.style.left = r.left + 'px';
+            dropLine.style.width = r.width + 'px';
+            dropLine.style.top = (before ? r.top - 2 : r.bottom) + 'px';
+            dropLine.style.display = 'block';
+        });
+        document.addEventListener('mouseup', () => {
+            if (!armedDrag) return;
+            if (dragBlock) {
+                if (dropTarget) {
+                    if (dropTarget.before) { dropTarget.block.before(dragBlock); }
+                    else { dropTarget.block.after(dragBlock); }
+                    afterBlockEdit();
+                }
+                dragBlock.style.opacity = '';
+            } else {
+                // No movement: it was a click - open the block menu.
+                const r = handle.getBoundingClientRect();
+                openMenu(r.left, r.bottom + 4, armedDrag.block);
+            }
+            armedDrag = null;
+            dragBlock = null;
+            dropTarget = null;
+            dropLine.style.display = 'none';
         });
         editor.addEventListener('contextmenu', (e) => {
             let b = blockOf(e.target) || blockAtY(e.clientY);
@@ -1436,11 +1221,123 @@
         menu.addEventListener('mousedown', (e) => e.stopPropagation());
         document.addEventListener('mousedown', (e) => {
             if (menuOpen() && !menu.contains(e.target) && e.target !== handle) closeMenu();
+            if (slashActive && !slashMenu.contains(e.target)) closeSlash();
         });
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape' && menuOpen()) closeMenu();
         });
-        window.addEventListener('scroll', () => { closeMenu(); handle.style.display = 'none'; }, true);
+        window.addEventListener('scroll', () => {
+            closeMenu();
+            closeSlash();
+            handle.style.display = 'none';
+            selBar.style.display = 'none';
+            selPalette.style.display = 'none';
+        }, true);
+
+        // ---- Enter-key behavior inside rich blocks ----
+        // WebKit's default Enter clones whole blocks (duplicating checkboxes and
+        // callout icons), so the common cases are handled explicitly here.
+        function closestIn(node, selector) {
+            const el = node && (node.nodeType === 1 ? node : node.parentElement);
+            const hit = el ? el.closest(selector) : null;
+            return hit && editor.contains(hit) ? hit : null;
+        }
+        function placeCaretIn(el, atEnd) {
+            const r = document.createRange();
+            r.selectNodeContents(el);
+            r.collapse(!atEnd);
+            const s = window.getSelection();
+            s.removeAllRanges();
+            s.addRange(r);
+        }
+        function isBlankText(t) { return !(t || '').replace(/ /g, ' ').trim(); }
+
+        function handleEnterInBlocks(e) {
+            const sel = window.getSelection();
+            if (!sel.rangeCount || !sel.isCollapsed) return false;
+            const n = sel.anchorNode;
+
+            const todo = closestIn(n, '.todo');
+            if (todo) {
+                e.preventDefault();
+                const span = todo.querySelector('span');
+                if (span && isBlankText(span.textContent)) {
+                    // Enter on an empty to-do exits the list into a paragraph.
+                    const p = document.createElement('p');
+                    p.innerHTML = '<br>';
+                    todo.replaceWith(p);
+                    placeCaretIn(p, false);
+                } else {
+                    // Continue the list with a fresh unchecked item.
+                    const fresh = document.createElement('div');
+                    fresh.className = 'todo';
+                    fresh.innerHTML = '<input type="checkbox" contenteditable="false"><span> </span>';
+                    todo.after(fresh);
+                    placeCaretIn(fresh.querySelector('span'), false);
+                }
+                notifyChanged();
+                return true;
+            }
+
+            const summary = closestIn(n, 'summary');
+            if (summary) {
+                // Enter on the toggle header moves into (and opens) its body.
+                e.preventDefault();
+                const details = summary.parentElement;
+                let body = details.querySelector(':scope > div');
+                if (!body) {
+                    body = document.createElement('div');
+                    body.innerHTML = '<br>';
+                    details.appendChild(body);
+                }
+                details.setAttribute('open', '');
+                placeCaretIn(body, false);
+                notifyChanged();
+                return true;
+            }
+
+            const calloutBody = closestIn(n, '.callout-body');
+            if (calloutBody) {
+                // Enter on an empty last line exits below the callout;
+                // otherwise the default split stays inside the body, which is fine.
+                const line = closestIn(n, '.callout-body > div');
+                if (line && line === calloutBody.lastElementChild && isBlankText(line.textContent)) {
+                    e.preventDefault();
+                    const p = document.createElement('p');
+                    p.innerHTML = '<br>';
+                    calloutBody.closest('.callout').after(p);
+                    line.remove();
+                    placeCaretIn(p, false);
+                    notifyChanged();
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        // ---- Interactive blocks (checkboxes, toggles) ----
+        editor.addEventListener('click', (e) => {
+            const box = e.target.closest('input[type="checkbox"]');
+            if (box) {
+                // Mirror the live state into the attribute so it survives
+                // innerHTML serialization (save/sync/undo).
+                if (box.checked) { box.setAttribute('checked', ''); } else { box.removeAttribute('checked'); }
+                const todo = box.closest('.todo');
+                if (todo) { todo.classList.toggle('done', box.checked); }
+                notifyChanged();
+                return;
+            }
+            const summary = e.target.closest('summary');
+            if (summary && e.offsetX < 20) {
+                // Click on the ▸ marker toggles; clicks on the text edit it.
+                const details = summary.parentElement;
+                if (details.hasAttribute('open')) { details.removeAttribute('open'); }
+                else { details.setAttribute('open', ''); }
+                e.preventDefault();
+                notifyChanged();
+            }
+        });
 
         // ---- Events ----
         editor.addEventListener('keydown', (e) => {
@@ -1499,12 +1396,6 @@
         });
         editor.addEventListener('input', () => { removeGhost(); notifyChanged(); scheduleCompletion(); checkSlashTrigger(); });
         editor.addEventListener('blur', () => { removeGhost(); notifyChanged(); });
-        document.addEventListener('mousedown', (e) => {
-            if (slashActive && !slashMenu.contains(e.target)) { closeSlash(); }
-            if (blockMenu.style.display === 'block' && !blockMenu.contains(e.target) && e.target !== dragHandle) {
-                closeBlockMenu();
-            }
-        });
 
         // Tell C# (on its next drain poll) that the editor is ready for content.
         function signalReady() { send({ type: 'ready' }); }
