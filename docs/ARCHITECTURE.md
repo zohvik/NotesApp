@@ -115,6 +115,80 @@ Understand these and you understand everything. Read in this order:
 
 ---
 
+## Part 3.5 — Developer review checklist
+
+The complete list of files worth reviewing, in the order to read them. Skim the
+small ones; study the starred (⭐ important, ⭐⭐ read closely). Rough times are
+for a first careful pass. After each ⭐ file, force yourself to answer *"if I
+wanted to change what this does, where would I edit?"* — that question is what
+turns reading into skill.
+
+### 1. The data (start here — ~5 min)
+- [ ] **[Note.cs](../src/NotesApp.Core/Models/Note.cs)** ⭐ — the central model.
+  Which fields sync vs. are UI-only (`[JsonIgnore]`/`[NotMapped]`); why a model
+  raises `INotifyPropertyChanged`.
+- [ ] **[Folder.cs](../src/NotesApp.Core/Models/Folder.cs)** — same pattern,
+  simpler; confirms the shape.
+
+### 2. The server (the whole backend — ~20 min)
+- [ ] **[Program.cs](../src/NotesApp.Api/Program.cs)** ⭐ — the *entire* API:
+  every endpoint, the DI setup, the upsert (last-write-wins) logic.
+- [ ] **[Data/NotesDbContext.cs](../src/NotesApp.Api/Data/NotesDbContext.cs)** —
+  how EF Core maps models → tables (tiny).
+- [ ] **[Services/OllamaAiService.cs](../src/NotesApp.Api/Services/OllamaAiService.cs)**
+  ⭐ — calling an LLM over plain HTTP (prompts, request/response shapes).
+- [ ] **[Services/NoteEmbeddingService.cs](../src/NotesApp.Api/Services/NoteEmbeddingService.cs)**
+  — embeddings + cosine similarity for "related notes"; the one algorithmic file.
+- [ ] **[appsettings.Development.json](../src/NotesApp.Api/appsettings.Development.json)**
+  + **[launchSettings.json](../src/NotesApp.Api/Properties/launchSettings.json)** —
+  connection string + the ports the client expects. Skim.
+- [ ] **[Migrations/](../src/NotesApp.Api/Migrations/)** — open *one*
+  `...InitialCreate.cs` to see what a migration is; it's generated, don't study it.
+
+### 3. The client core (where you'll live — ~45 min)
+- [ ] **[MauiProgram.cs](../src/NotesApp.Client/MauiProgram.cs)** ⭐ — client entry
+  point + DI wiring. Read this *first* to see what depends on what.
+- [ ] **[NotesViewModel.cs](../src/NotesApp.Client/ViewModels/NotesViewModel.cs)**
+  ⭐⭐ — the brain (~900 lines), the most important file. Read the
+  properties/commands, then auto-save, then sync — not top to bottom.
+- [ ] **[MainPage.xaml](../src/NotesApp.Client/MainPage.xaml)** ⭐ — the whole UI;
+  how `{Binding}` and `Command=` connect XAML to the ViewModel.
+- [ ] **[MainPage.xaml.cs](../src/NotesApp.Client/MainPage.xaml.cs)** ⭐ — the C#
+  side of the editor bridge (base64/poll). Read *after* the ViewModel.
+- [ ] **[editor/index.html](../src/NotesApp.Client/Resources/Raw/editor/index.html)**
+  ⭐⭐ — the rich editor, a self-contained web app (~1500 lines). Study the bridge
+  section + one feature (e.g. the slash menu); skim the rest.
+- [ ] **[App.xaml.cs](../src/NotesApp.Client/App.xaml.cs)** — lifecycle + on-close
+  save-flush hooks. Short but important for "what happens on quit."
+
+### 4. The client services (how it talks out — ~20 min)
+- [ ] **[Sync/SyncService.cs](../src/NotesApp.Client/Sync/SyncService.cs)** ⭐ —
+  push/pull; the clearest example of the offline-first pattern.
+- [ ] **[Ai/AiService.cs](../src/NotesApp.Client/Ai/AiService.cs)** — the client
+  half of every AI call (thin HTTP wrappers); pairs with OllamaAiService.
+- [ ] **[Data/NotesDbContext.cs](../src/NotesApp.Client/Data/NotesDbContext.cs)** —
+  the SQLite context; compare it to the API's.
+- [ ] **[Theming/ThemeManager.cs](../src/NotesApp.Client/Theming/ThemeManager.cs)**
+  — runtime theming via resource swapping; self-contained, easy win.
+- [ ] **[Text/MarkdownConverter.cs](../src/NotesApp.Client/Text/MarkdownConverter.cs)**
+  — a clean, testable pure function; a good model for "how to write a utility."
+
+### 5. Build & infra config (context — ~10 min)
+- [ ] **[NotesApp.Client.csproj](../src/NotesApp.Client/NotesApp.Client.csproj)** ⭐
+  — the package list *is* the tech stack; also the MAUI version pin and the
+  trimmer feature-switch that keep the WebView bridge alive. Know why each line
+  is there.
+- [ ] **[.github/workflows/windows-build.yml](../.github/workflows/windows-build.yml)**
+  — what CI does (compile-check on a Windows runner).
+- [ ] **[WINDOWS.md](WINDOWS.md)** — how to run the finished app on a PC.
+
+### Deliberately skip (don't waste time)
+`AppShell.xaml`, `App.xaml`, `Platforms/`, `Resources/` (fonts/images/splash),
+anything in `bin/`/`obj/`, `*.Designer.cs`, and the empty
+`tests/NotesApp.Tests/UnitTest1.cs`. These are template-generated boilerplate.
+
+---
+
 ## Part 4 — The golden path: trace one note end to end
 
 The single most useful exercise. Follow "I typed in a note and it saved":
