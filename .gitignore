@@ -21,3 +21,16 @@ obj/
 *.pfx
 *.mobileprovision
 appsettings.*.local.json
+
+## Secrets — never commit credentials.
+## The real DB connection string lives in dotnet user-secrets (outside the repo);
+## these patterns are defensive so a stray credential file can't be added by accident.
+.env
+.env.*
+secrets.json
+appsettings.Local.json
+appsettings.*.Local.json
+*.pem
+*.key
+*.p12
+*.keystore
