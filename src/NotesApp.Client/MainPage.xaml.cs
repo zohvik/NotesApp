@@ -2,7 +2,7 @@ using System.ComponentModel;
 using System.Text;
 using System.Text.Json;
 using NotesApp.Client.Ai;
-using NotesApp.Client.Text;
+using NotesApp.Core.Text;
 using NotesApp.Client.Theming;
 using NotesApp.Client.ViewModels;
 

@@ -2,7 +2,7 @@ using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace NotesApp.Client.Text;
+namespace NotesApp.Core.Text;
 
 // Minimal Markdown -> HTML converter for rendering AI output in the rich editor.
 // Handles tables, headings, bold, and bullet lists; everything else becomes a

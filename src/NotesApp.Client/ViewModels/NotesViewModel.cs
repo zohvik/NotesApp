@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using NotesApp.Client.Ai;
 using NotesApp.Client.Data;
 using NotesApp.Client.Sync;
-using NotesApp.Client.Text;
+using NotesApp.Core.Text;
 using NotesApp.Client.Theming;
 using NotesApp.Core.Models;
 
