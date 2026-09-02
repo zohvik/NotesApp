@@ -1,3 +1,9 @@
+# DISABLED (Sept 2026): this workflow is turned off in the GitHub UI
+# because the account's Actions runs are blocked by a billing lock, so
+# every run failed before starting. The config itself is correct.
+# Re-enable once billing is cleared at github.com/settings/billing:
+#     gh workflow enable "Windows Build"
+
 name: Windows Build
 
 # The MAUI Windows target can only be compiled on Windows. This runs on a
